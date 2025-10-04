@@ -22,7 +22,7 @@ def write_nodes(nodes, filepath="nodes.csv"):
         writer.writerow(headers)
 
         for node_id, node in nodes.items():
-            propery_values = [node.get(p) for p in properties]
+            propery_values = [node["properties"].get(p) for p in properties]
             row = [str(node_id), node["label"]] + propery_values
             writer.writerow(row)
 
