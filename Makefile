@@ -58,6 +58,8 @@ run-neo4j:
 		-e NEO4J_AUTH=neo4j/$(NEO4J_PASSWORD) \
 		-e NEO4J_PLUGINS='["apoc"]' \
 		-e NEO4J_dbms_default__database=$(NEO4J_DB) \
+		-e NEO4J_dbms_memory_heap_max__size=6G \
+		-e NEO4J_dbms_memory_transaction_global__max__size=6G \
 		-v $(DATA_DIR):/data \
 		-v $(IMPORT_DIR):/var/lib/neo4j/import \
 		$(NEO4J_IMAGE)
@@ -67,8 +69,8 @@ create-indexes:
 	@./scripts/create-indexes.sh
 
 stop:
-	@docker stop $(CONTAINER_NAME)
-
-clean:
 	@docker rm -f $(CONTAINER_NAME) 2>/dev/null || true
+	@echo "Neo4J container stopped and removed"
+
+clean: stop
 	@rm -rf $(NEO4J_DIR)
