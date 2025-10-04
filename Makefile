@@ -61,6 +61,7 @@ run-neo4j:
 		-v $(DATA_DIR):/data \
 		-v $(IMPORT_DIR):/var/lib/neo4j/import \
 		$(NEO4J_IMAGE)
+	@echo "Neo4J container running!"
 
 create-indexes:
 	@./scripts/create-indexes.sh
