@@ -68,9 +68,9 @@ def _query_names(sparql, author_uris):
     return result_dict
 
 
-def _fetch_author_names(author_nodes):
+def _fetch_author_names(author_nodes, batch_size):
     author_uris = [n["properties"]["uri"] for n in author_nodes]
-    author_uri_batches = _to_bathces(author_uris, batch_size=30_000)
+    author_uri_batches = _to_bathces(author_uris, batch_size)
 
     sparql = SPARQLWrapper(SEMOPENALEX_SPARQL_ENDPOINT)
     sparql.setMethod(POST)
@@ -276,9 +276,9 @@ class RDFNeo4jParser:
 
         logger.info("Nodes and relationships built")
 
-    def _enrich_author_nodes(self):
+    def _enrich_author_nodes(self, batch_size=30_000):
         author_nodes = [n for n in self.nodes.values() if n["label"] == "Author"]
-        uri_to_name = _fetch_author_names(author_nodes)
+        uri_to_name = _fetch_author_names(author_nodes, batch_size)
         for node in author_nodes:
             uri = node["properties"]["uri"]
             if uri in uri_to_name:
