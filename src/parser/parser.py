@@ -188,10 +188,20 @@ class RDFNeo4jParser:
                         pred_label = p_
 
                 # property
+                # if we encounter a property key repeteadly, we make a list of
+                # the values
                 if isinstance(o, Literal):
                     property_key = _to_camel_case(pred_label)
                     value = str(o).replace("\n", " ").strip()
-                    self.nodes[s]["properties"][property_key] = value
+
+                    if property_key in self.nodes[s]["properties"]:
+                        current = self.nodes[s]["properties"][property_key]
+                        if isinstance(current, list):
+                            current.append(value)
+                        else:
+                            self.nodes[s]["properties"][property_key] = [current, value]
+                    else:
+                        self.nodes[s]["properties"][property_key] = value
 
                 # object is another node, so create a relationship
                 # (remaining unknown objects are stored as properties for good measure)
