@@ -4,6 +4,8 @@ from rdflib import Graph, URIRef, Literal, RDF, RDFS, OWL
 
 logger = logging.getLogger(__name__)
 
+AUTHOR_URI = "http://purl.org/dc/terms/creator"
+
 
 def _to_pascal_case(s):
     # converts strings "Like This" into "LikeThis", used for node labels
@@ -115,7 +117,8 @@ class RDFNeo4jParser:
     def identify_nodes(self):
         """Find all RDF subjects that should become Neo4j nodes."""
 
-        # any subject that has rdf:type -> becomes a node
+        # any subject that has rdf:type -> becomes a node (generally, entities that
+        # should become nodes are represented in triplets with a type predicate)
         for s, p, o in self.g.triples((None, RDF.type, None)):
             if isinstance(s, URIRef):
                 self.node_uris.add(s)
@@ -132,6 +135,13 @@ class RDFNeo4jParser:
                 if (o, RDF.type, None) in self.g:
                     self.node_uris.add(o)
 
+        # authors are represented in RDF triplets as SemOpenAlex reference URIs always
+        # as objects, their predicate is custom `dcterms:creator` so they're not
+        # captured in the earlier blocks, and therefore require custom handling
+        for s, p, o in self.g.triples((None, URIRef(AUTHOR_URI), None)):
+            if isinstance(o, URIRef):
+                self.node_uris.add(o)
+
         logger.info("Nodes identified")
 
     def build_nodes_and_relationships(self):
@@ -146,7 +156,7 @@ class RDFNeo4jParser:
             if s not in self.nodes:
                 self.nodes[s] = {"label": None, "properties": {}}
 
-            # rdf:type -> label assignment
+            # node labels
             if p == RDF.type:
                 if o in self.class_labels:
                     label = self.class_labels[o]
@@ -158,6 +168,12 @@ class RDFNeo4jParser:
                         label = _to_pascal_case(o_)
                         self.nodes[s]["label"] = label
                     # else: ignore OWL/ontology artifacts
+
+            # custom handling for author triplets
+            elif p == URIRef(AUTHOR_URI) and isinstance(o, URIRef):
+                if o not in self.nodes:
+                    self.nodes[o] = {"label": "Author", "properties": {"uri": str(o)}}
+                self.relationships.append((s, "HAS_AUTHOR", o))
 
             # other predicates
             else:
@@ -171,12 +187,14 @@ class RDFNeo4jParser:
                         logger.warning(f"Unknown predicate {p}")
                         pred_label = p_
 
+                # property
                 if isinstance(o, Literal):
-                    # store as property
                     property_key = _to_camel_case(pred_label)
                     value = str(o).replace("\n", " ").strip()
                     self.nodes[s]["properties"][property_key] = value
 
+                # object is another node, so create a relationship
+                # (remaining unknown objects are stored as properties for good measure)
                 elif isinstance(o, URIRef):
                     # only make relationship if the object is a node
                     if o in self.node_uris:

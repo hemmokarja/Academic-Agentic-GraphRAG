@@ -25,3 +25,6 @@ CREATE INDEX repo_framework IF NOT EXISTS FOR (n:Repository) ON (n.hasFramework)
 // Conference
 CREATE INDEX conf_name IF NOT EXISTS FOR (n:Conference) ON (n.name);
 CREATE INDEX conf_acronym IF NOT EXISTS FOR (n:Conference) ON (n.acronym);
+
+// Author
+CREATE INDEX author_uri IF NOT EXISTS FOR (n:Author) ON (n.uri);
