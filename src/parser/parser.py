@@ -1,10 +1,12 @@
 import logging
 
 from rdflib import Graph, URIRef, Literal, RDF, RDFS, OWL
+from SPARQLWrapper import SPARQLWrapper, JSON, POST
 
 logger = logging.getLogger(__name__)
 
 AUTHOR_URI = "http://purl.org/dc/terms/creator"
+SEMOPENALEX_SPARQL_ENDPOINT = "https://semopenalex.org/sparql"
 
 
 def _to_pascal_case(s):
@@ -28,10 +30,67 @@ def _to_camel_case(s):
     return words[0].lower() + ''.join(w.capitalize() for w in words[1:])
 
 
+def _to_bathces(lst, batch_size):
+    batches = []
+    for i in range(0, len(lst), batch_size):
+        batches.append(lst[i: i + batch_size])
+    return batches
+
+
+def _to_sparql_string(author_uris):
+    strings = [f"<{u}>" for u in author_uris]
+    return "\n".join(strings)
+
+
+def _query_names(sparql, author_uris):
+    author_uris_string = _to_sparql_string(author_uris)
+    query = f"""
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    SELECT ?author ?name
+    WHERE {{
+        VALUES ?author {{
+        {author_uris_string}
+        }}
+        ?author foaf:name ?name .
+    }}
+    """
+
+    sparql.setQuery(query)
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()
+
+    result_dict = {}
+    for result in results["results"]["bindings"]:
+        author_uri = result["author"]["value"]
+        name = result["name"]["value"]
+        result_dict[author_uri] = name
+
+    return result_dict
+
+
+def _fetch_author_names(author_nodes):
+    author_uris = [n["properties"]["uri"] for n in author_nodes]
+    author_uri_batches = _to_bathces(author_uris, batch_size=30_000)
+
+    sparql = SPARQLWrapper(SEMOPENALEX_SPARQL_ENDPOINT)
+    sparql.setMethod(POST)
+
+    uri_to_name = {}
+    for uri_batch in author_uri_batches:
+        batch_uri_to_name = _query_names(sparql, uri_batch)
+        uri_to_name.update(batch_uri_to_name)
+
+    return uri_to_name
+
+
 class RDFNeo4jParser:
-    def __init__(self, ttl_filepath: str, owl_filepath: str):
+    def __init__(
+        self, ttl_filepath: str, owl_filepath: str, enrich_authors: bool = True
+    ):
         self.ttl_filepath = ttl_filepath
         self.owl_filepath = owl_filepath
+        self.enrich_authors = enrich_authors  # fetch names from SemOpenAlex SPARQL endpoint
+
         self.g = Graph()
 
         # mappings from URI -> human-readable labels
@@ -61,13 +120,13 @@ class RDFNeo4jParser:
             "owl#Class", "owl#ObjectProperty", "owl#DatatypeProperty", "owl#Ontology"
         }
 
-    def parse_files(self):
+    def _parse_files(self):
         """Parse TTL and OWL files into a single RDF graph."""
         self.g.parse(self.ttl_filepath, format="ttl")
         self.g.parse(self.owl_filepath, format="xml")
         logger.info("RDF graph parsed")
 
-    def extract_ontology_labels(self):
+    def _extract_ontology_labels(self):
         """
         Extract human-readable labels for classes and predicates from the OWL ontology.
         For predicates without rdfs:label, fallback to last URI segment.
@@ -114,7 +173,7 @@ class RDFNeo4jParser:
 
         logger.info("Ontology labels extracted")
 
-    def identify_nodes(self):
+    def _identify_nodes(self):
         """Find all RDF subjects that should become Neo4j nodes."""
 
         # any subject that has rdf:type -> becomes a node (generally, entities that
@@ -144,7 +203,7 @@ class RDFNeo4jParser:
 
         logger.info("Nodes identified")
 
-    def build_nodes_and_relationships(self):
+    def _build_nodes_and_relationships(self):
         """Classify all triples as node properties or relationships."""
         for s, p, o in self.g.triples((None, None, None)):
             
@@ -217,12 +276,26 @@ class RDFNeo4jParser:
 
         logger.info("Nodes and relationships built")
 
-    def run(self):
+    def _enrich_author_nodes(self):
+        author_nodes = [n for n in self.nodes.values() if n["label"] == "Author"]
+        uri_to_name = _fetch_author_names(author_nodes)
+        for node in author_nodes:
+            uri = node["properties"]["uri"]
+            if uri in uri_to_name:
+                node["properties"]["name"] = uri_to_name[uri]
+        
+        logger.info("Enriched author nodes with names")
+
+    def parse(self):
         logger.info("Starting to process RDF files into nodes and relationships...")
-        self.parse_files()
-        self.extract_ontology_labels()
-        self.identify_nodes()
-        self.build_nodes_and_relationships()
+        self._parse_files()
+        self._extract_ontology_labels()
+        self._identify_nodes()
+        self._build_nodes_and_relationships()
+
+        if self.enrich_authors:
+            self._enrich_author_nodes()
+
         logger.info(
             f"Finished processing! Collected {len(self.nodes)} nodes and "
             f"{len(self.relationships)} relationships."
