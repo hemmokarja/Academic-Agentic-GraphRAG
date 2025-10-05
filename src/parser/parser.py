@@ -6,7 +6,6 @@ from SPARQLWrapper import SPARQLWrapper, JSON, POST
 logger = logging.getLogger(__name__)
 
 AUTHOR_URI = "http://purl.org/dc/terms/creator"
-SEMOPENALEX_SPARQL_ENDPOINT = "https://semopenalex.org/sparql"
 
 
 def _to_pascal_case(s):
@@ -70,13 +69,12 @@ def _query_names(sparql, author_uris):
 
 def _fetch_author_names(author_nodes, batch_size):
     author_uris = [n["properties"]["uri"] for n in author_nodes]
-    author_uri_batches = _to_bathces(author_uris, batch_size)
 
-    sparql = SPARQLWrapper(SEMOPENALEX_SPARQL_ENDPOINT)
+    sparql = SPARQLWrapper("https://semopenalex.org/sparql")
     sparql.setMethod(POST)
 
     uri_to_name = {}
-    for uri_batch in author_uri_batches:
+    for uri_batch in _to_bathces(author_uris, batch_size):
         batch_uri_to_name = _query_names(sparql, uri_batch)
         uri_to_name.update(batch_uri_to_name)
 
