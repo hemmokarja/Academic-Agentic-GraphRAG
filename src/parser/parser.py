@@ -84,9 +84,7 @@ def _fetch_author_names(author_nodes, batch_size):
 
 
 class RDFNeo4jParser:
-    def __init__(
-        self, ttl_filepath: str, owl_filepath: str, enrich_authors: bool = True
-    ):
+    def __init__(self, ttl_filepath, owl_filepath, enrich_authors=True):
         self.ttl_filepath = ttl_filepath
         self.owl_filepath = owl_filepath
         self.enrich_authors = enrich_authors  # fetch names from SemOpenAlex SPARQL endpoint
