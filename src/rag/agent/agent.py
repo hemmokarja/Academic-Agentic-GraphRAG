@@ -1,0 +1,377 @@
+import logging
+import time
+import signal
+from contextlib import contextmanager
+from typing import (
+    Any,
+    Annotated,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Sequence,
+    TypedDict,
+    Literal,
+)
+
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.messages import (
+    BaseMessage, 
+    HumanMessage, 
+    AIMessage, 
+    ToolMessage,
+    SystemMessage
+)
+from langchain_core.tools import BaseTool
+from langchain_core.language_models import BaseChatModel
+from langchain_core.runnables import RunnableConfig
+from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
+
+
+class AgentConfig(BaseModel):
+    max_iterations: int = Field(
+        default=15,
+        description="Maximum number of reasoning iterations before forcing stop"
+    )
+    max_execution_time: float = Field(
+        default=300.0,
+        description="Maximum execution time in seconds"
+    )
+    tool_execution_timeout: float = Field(
+        default=30.0,
+        description="Timeout for individual tool executions"
+    )
+    max_tool_retries: int = Field(
+        default=2,
+        description="Maximum retries for failed tool executions"
+    )
+    system_message: Optional[str] = Field(
+        default=None,
+        description="System message to prepend to conversations"
+    )
+
+
+class TimeoutError(Exception):
+    """Raised when tool execution times out."""
+    pass
+
+
+class AgentState(TypedDict):
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    iteration_count: int
+    start_time: float
+    errors: List[Dict[str, Any]]  # keep error tracking for observability/debugging
+
+
+@contextmanager
+def timeout(seconds: float):
+    """Context manager for timing out operations."""
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Operation timed out after {seconds} seconds")
+    
+    # Set the signal handler
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    
+    try:
+        yield
+    finally:
+        # Restore the old handler
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old_handler)
+
+
+class ReActAgent:
+    def __init__(
+        self,
+        llm: BaseChatModel,
+        tools: List[BaseTool],
+        config: AgentConfig = AgentConfig(),
+        checkpointer: Optional[Any] = None
+    ):
+        self.llm = llm
+        self.tools = tools
+        self.config = config
+        self.checkpointer = checkpointer or MemorySaver()
+
+        self.llm_with_tools = self.llm.bind_tools(tools)
+
+        self.tools_by_name = {t.name: t for t in tools}
+
+        self.graph = self._build_graph()
+        
+        logger.info(f"ReAct agent initialized with {len(tools)} tools")
+    
+    def _build_graph(self) -> Any:
+        workflow = StateGraph(AgentState)
+
+        workflow.add_node("agent", self._agent_node)
+        workflow.add_node("tools", self._tools_node)
+
+        workflow.add_edge(START, "agent")
+        workflow.add_edge("tools", "agent")
+
+        workflow.add_conditional_edges(
+            "agent",
+            self._route_after_agent,
+            {
+                "tools": "tools",
+                "end": END
+            }
+        )
+        
+        return workflow.compile(checkpointer=self.checkpointer)
+    
+    def _agent_node(self, state: AgentState) -> Dict[str, Any]:
+        messages = list(state["messages"])
+        iteration = state.get("iteration_count", 0)
+        
+        # check iteration limit
+        if iteration >= self.config.max_iterations:
+            logger.warning(f"Max iterations ({self.config.max_iterations}) reached")
+
+            summary = self._generate_summary(messages)
+            AIMessage(
+                content=(
+                    f"I've reached the maximum number of reasoning steps ({self.config.max_iterations}). "
+                    f"Here's the summary based on the information I was able to gather:\n\n{summary}"
+                )
+            )
+            return {
+                "messages": [message],
+                "iteration_count": iteration + 1
+            }
+
+        # check execution time
+        elapsed = time.time() - state.get("start_time", time.time())
+        if elapsed > self.config.max_execution_time:
+            logger.warning(f"Max execution time ({self.config.max_execution_time}s) exceeded")
+            
+            summary = self._generate_summary(messages)
+            message = AIMessage(
+                content=(
+                    f"I've reached the time limit for this query. {summary}"
+                    f"Here's the summary based on the information I was able to gather:\n\n{summary}"
+                )
+            )
+            return {
+                "messages": [message],
+                "iteration_count": iteration + 1
+            }
+
+        # add system message on first iteration if configured
+        if self.config.system_message and iteration == 0:
+            if not any(isinstance(msg, SystemMessage) for msg in messages):
+                messages = [SystemMessage(content=self.config.system_message)] + messages
+        
+        # invoke agent
+        try:
+            logger.info(f"Agent reasoning (iteration {iteration})...")
+            response = self.llm_with_tools.invoke(messages)
+
+            if hasattr(response, "tool_calls") and response.tool_calls:
+                logger.info(f"Agent planning to call {len(response.tool_calls)} tool(s)")
+                for tc in response.tool_calls:
+                    logger.debug(f"  - {tc['name']}({tc['args']})")
+
+            return {
+                "messages": [response],
+                "iteration_count": iteration + 1
+            }
+
+        except Exception as e:
+            logger.error(f"Agent node error: {e}", exc_info=True)
+            
+            # log error for observability
+            error_record = {
+                "node": "agent",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": time.time(),
+                "iteration": iteration
+            }
+
+            return {
+                "messages": [
+                    AIMessage(
+                        content=f"I encountered an error while processing your request: {str(e)}. "
+                        f"Please try rephrasing your question or breaking it into smaller parts."
+                    )
+                ],
+                "iteration_count": iteration + 1,
+                "errors": [error_record]
+            }
+    
+    def _tools_node(self, state: AgentState) -> Dict[str, Any]:
+        last_message = state["messages"][-1]
+
+        if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
+            logger.warning("Tools node called but no tool calls found")
+            return {}
+
+        tool_messages = []
+        errors = []
+
+        # Execute each tool call with retry logic
+        for tool_call in last_message.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
+            tool_id = tool_call["id"]
+            
+            logger.info(f"Executing tool: {tool_name}")
+            
+            result = None
+
+            for attempt in range(self.config.max_tool_retries + 1):
+                try:
+                    if tool_name not in self.tools_by_name:
+                        raise ValueError(f"Unknown tool: {tool_name}")
+                    
+                    tool = self.tools_by_name[tool_name]
+
+                    try:
+                        with timeout(self.config.tool_execution_timeout):
+                            result = tool.invoke(tool_args)
+                    except TimeoutError as te:
+                        raise TimeoutError(
+                            f"Tool execution timed out after {self.config.tool_execution_timeout}s"
+                        )
+
+                    tool_messages.append(
+                        ToolMessage(
+                            content=str(result),
+                            tool_call_id=tool_id,
+                            name=tool_name
+                        )
+                    )
+
+                    logger.info(f"Tool {tool_name} executed successfully")
+                    break
+
+                except Exception as e:
+                    logger.error(
+                        f"Tool {tool_name} failed (attempt {attempt + 1}/{self.config.max_tool_retries + 1}): {e}"
+                    )
+
+                    if attempt < self.config.max_tool_retries:
+                        wait_time = 0.5 * (2 ** attempt)
+                        logger.info(f"Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        error_msg = (
+                            f"Tool '{tool_name}' failed after {self.config.max_tool_retries + 1} attempts. "
+                            f"Error: {str(e)}. Please try a different approach or rephrase your query."
+                        )
+                        tool_messages.append(
+                            ToolMessage(
+                                content=error_msg,
+                                tool_call_id=tool_id,
+                                name=tool_name
+                            )
+                        )
+                        error_record = {
+                            "node": "tools",
+                            "tool": tool_name,
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "attempts": self.config.max_tool_retries + 1,
+                            "timestamp": time.time()
+                        }
+                        errors.append(error_record)
+        
+        return {
+            "messages": tool_messages,
+            "errors": errors if errors else []
+        }
+
+    def _route_after_agent(self, state: AgentState) -> Literal["tools", "end"]:
+        last_message = state["messages"][-1]
+
+        # if this was an error response (no tool calls possible)
+        if not hasattr(last_message, "tool_calls"):
+            return "end"
+
+        if last_message.tool_calls:
+            return "tools"
+        
+        return "end"
+
+    def _generate_summary(self, messages: List[BaseMessage]) -> str:
+        prompt = HumanMessage(
+            content=(
+                "Summarize the conversation. Focus on the main facts, any uncertainties, "
+                "and recommend one next step. Do not repeat raw tool outputs verbatim; synthesize them. "
+                "Aim at responding to the user's original question as well as the provided material allows. "
+            )
+        )
+        messages = messages + [prompt]
+        try:
+            with timeout(self.config.summary_timeout):
+                resp = self.llm.invoke(messages)
+                return resp.content.strip() if hasattr(resp, "content") else str(resp).strip()
+        except Exception as e:
+            logger.warning(f"Summary LLM failed: {e}")
+            return "I couldn't produce a summary due to a summarizer error."
+
+    def invoke(
+        self,
+        input_message: str,
+        config: Optional[RunnableConfig] = None
+    ) -> Dict[str, Any]:
+        logger.info("Starting agent execution...")
+
+        initial_state = {
+            "messages": [HumanMessage(content=input_message)],
+            "iteration_count": 0,
+            "start_time": time.time(),
+            "errors": []
+        }
+        try:
+            final_state = self.graph.invoke(initial_state, config=config)
+            
+            execution_time = time.time() - final_state["start_time"]
+            logger.info(
+                f"Agent execution completed: "
+                f"iterations={final_state['iteration_count']}, "
+                f"time={execution_time:.2f}s, "
+                f"errors={len(final_state.get('errors', []))}"
+            )
+            
+            return final_state
+            
+        except Exception as e:
+            logger.error(f"Agent execution failed: {e}", exc_info=True)
+            raise
+
+    def stream(
+        self,
+        input_message: str,
+        config: Optional[RunnableConfig] = None,
+        stream_mode: Literal["messages", "updates"] = "messages"
+    ) -> Generator[Any, Any, Any]:
+        logger.info("Starting agent execution...")
+
+        initial_state = {
+            "messages": [HumanMessage(content=input_message)],
+            "iteration_count": 0,
+            "start_time": time.time(),
+            "errors": []
+        }
+        try:
+            for chunk in self.graph.stream(
+                initial_state, config=config, stream_mode=stream_mode
+            ):
+                yield chunk
+
+        except Exception as e:
+            logger.exception("Agent execution failed!")
+            err = {"error": str(e)}
+            yield err, None if stream_mode == "messages" else err
+
+        finally:
+            duration = time.time() - initial_state["start_time"]
+            logger.info(f"Agent execution finished in {duration:.2f}s")

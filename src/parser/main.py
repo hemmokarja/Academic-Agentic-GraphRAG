@@ -2,8 +2,8 @@ import argparse
 import logging
 import os
 
-import export
-from parser import RDFNeo4jParser
+from parser import export
+from parser.parser import RDFNeo4jParser
 
 
 logging.basicConfig(
