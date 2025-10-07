@@ -127,7 +127,11 @@ class ReActAgent:
             return "I couldn't produce a summary due to an error."
 
 
-    def _handle_agent_iter_overrun(self, messages, iteration):
+    def _handle_agent_iter_overrun(
+        self,
+        messages: List[BaseMessage],
+        iteration: int,
+    ) -> Dict[str, Any]:
         logger.warning(f"Max iterations ({self.config.max_iterations}) reached")
         summary = self._generate_summary(messages)
         message = AIMessage(
@@ -141,7 +145,11 @@ class ReActAgent:
             "iteration_count": iteration + 1
         }
 
-    def _handle_agent_timeout(self, messages, iteration):
+    def _handle_agent_timeout(
+        self,
+        messages: List[BaseMessage],
+        iteration: int,
+    ) -> Dict[str, Any]:
         logger.warning(
             f"Max execution time ({self.config.max_execution_time}s) exceeded"
         )
