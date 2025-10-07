@@ -106,49 +106,75 @@ class ReActAgent:
         )
         
         return workflow.compile(checkpointer=self.checkpointer)
-    
+
+    def _generate_summary(self, messages: List[BaseMessage]) -> str:
+        """Generate a summary of the conversation so far."""
+        prompt = HumanMessage(
+            content=(
+                "Summarize the conversation. Focus on the main facts, any "
+                "uncertainties, and recommend one next step. Do not repeat raw tool "
+                "outputs verbatim; synthesize them. Aim at responding to the user's "
+                "original question as well as the provided material allows."
+                "State what you didn't manage to achieve."
+            )
+        )
+        messages_with_prompt = messages + [prompt]
+        try:
+            resp = self.llm.invoke(messages_with_prompt)
+            return resp.content.strip()
+        except Exception as e:
+            logger.warning(f"Summary generation failed: {e}")
+            return "I couldn't produce a summary due to an error."
+
+
+    def _handle_agent_iter_overrun(self, messages, iteration):
+        logger.warning(f"Max iterations ({self.config.max_iterations}) reached")
+        summary = self._generate_summary(messages)
+        message = AIMessage(
+            content=(
+                f"I've reached the maximum number of reasoning steps "
+                f"({self.config.max_iterations}). Here's what I found:\n\n{summary}"
+            )
+        )
+        return {
+            "messages": [message],
+            "iteration_count": iteration + 1
+        }
+
+    def _handle_agent_timeout(self, messages, iteration):
+        logger.warning(
+            f"Max execution time ({self.config.max_execution_time}s) exceeded"
+        )
+        summary = self._generate_summary(messages)
+        message = AIMessage(
+            content=(
+                f"I've reached the time limit for this query. "
+                f"Here's what I found:\n\n{summary}"
+            )
+        )
+        return {
+            "messages": [message],
+            "iteration_count": iteration + 1
+        }
+
     def _agent_node(self, state: AgentState) -> Dict[str, Any]:
         messages = list(state["messages"])
         iteration = state.get("iteration_count", 0)
-        
-        # check iteration limit
+
         if iteration >= self.config.max_iterations:
-            logger.warning(f"Max iterations ({self.config.max_iterations}) reached")
+            return self._handle_agent_iter_overrun(messages, iteration)
 
-            summary = self._generate_summary(messages)
-            message = AIMessage(
-                content=(
-                    f"I've reached the maximum number of reasoning steps ({self.config.max_iterations}). "
-                    f"Here's what I found:\n\n{summary}"
-                )
-            )
-            return {
-                "messages": [message],
-                "iteration_count": iteration + 1
-            }
-
-        # check execution time
         elapsed = time.time() - state.get("start_time", time.time())
         if elapsed > self.config.max_execution_time:
-            logger.warning(f"Max execution time ({self.config.max_execution_time}s) exceeded")
-            
-            summary = self._generate_summary(messages)
-            message = AIMessage(
-                content=(
-                    f"I've reached the time limit for this query. "
-                    f"Here's what I found:\n\n{summary}"
-                )
-            )
-            return {
-                "messages": [message],
-                "iteration_count": iteration + 1
-            }
+            return self._handle_agent_timeout(messages, iteration)
 
         # add system message on first iteration if configured
         if self.config.system_message and iteration == 0:
             if not any(isinstance(msg, SystemMessage) for msg in messages):
-                messages = [SystemMessage(content=self.config.system_message)] + messages
-        
+                messages = (
+                    [SystemMessage(content=self.config.system_message)] + messages
+                )
+
         # invoke agent
         try:
             logger.info(f"Agent reasoning (iteration {iteration + 1})...")
@@ -178,8 +204,11 @@ class ReActAgent:
             return {
                 "messages": [
                     AIMessage(
-                        content=f"I encountered an error while processing your request: {str(e)}. "
-                        f"Please try rephrasing your question or breaking it into smaller parts."
+                        content=(
+                            f"I encountered an error while processing your request: "
+                            f"{str(e)}. Please try rephrasing your question or "
+                            "breaking it into smaller parts."
+                        )
                     )
                 ],
                 "iteration_count": iteration + 1,
@@ -274,8 +303,10 @@ class ReActAgent:
                         time.sleep(wait_time)
                     else:
                         error_msg = (
-                            f"Tool '{tool_name}' timed out after {self.config.max_tool_retries + 1} attempts. "
-                            f"Each attempt exceeded {self.config.tool_execution_timeout}s timeout."
+                            f"Tool '{tool_name}' timed out after "
+                            f"{self.config.max_tool_retries + 1} attempts. "
+                            "Each attempt exceeded "
+                            f"{self.config.tool_execution_timeout}s timeout."
                         )
                         tool_messages.append(
                             ToolMessage(
@@ -296,7 +327,8 @@ class ReActAgent:
 
                 except Exception as e:
                     logger.error(
-                        f"Tool {tool_name} failed (attempt {attempt + 1}/{self.config.max_tool_retries + 1}): {e}"
+                        f"Tool {tool_name} failed (attempt "
+                        f"{attempt + 1}/{self.config.max_tool_retries + 1}): {e}"
                     )
 
                     if attempt < self.config.max_tool_retries:
@@ -305,8 +337,10 @@ class ReActAgent:
                         time.sleep(wait_time)
                     else:
                         error_msg = (
-                            f"Tool '{tool_name}' failed after {self.config.max_tool_retries + 1} attempts. "
-                            f"Error: {str(e)}. Please try a different approach or rephrase your query."
+                            f"Tool '{tool_name}' failed after "
+                            f"{self.config.max_tool_retries + 1} attempts. "
+                            f"Error: {str(e)}. Please try a different approach or "
+                            "rephrase your query."
                         )
                         tool_messages.append(
                             ToolMessage(
@@ -340,23 +374,6 @@ class ReActAgent:
             return "end"
 
         return "tools"
-
-    def _generate_summary(self, messages: List[BaseMessage]) -> str:
-        """Generate a summary of the conversation so far."""
-        prompt = HumanMessage(
-            content=(
-                "Summarize the conversation. Focus on the main facts, any uncertainties, "
-                "and recommend one next step. Do not repeat raw tool outputs verbatim; synthesize them. "
-                "Aim at responding to the user's original question as well as the provided material allows."
-            )
-        )
-        messages_with_prompt = messages + [prompt]
-        try:
-            resp = self.llm.invoke(messages_with_prompt)
-            return resp.content.strip() if hasattr(resp, "content") else str(resp).strip()
-        except Exception as e:
-            logger.warning(f"Summary generation failed: {e}")
-            return "I couldn't produce a summary due to an error."
 
     def invoke(
         self,
