@@ -1,32 +1,20 @@
 import logging
 import time
-import signal
-from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import (
-    Any,
-    Annotated,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Sequence,
-    TypedDict,
-    Literal,
+    Annotated, Any, Dict, Generator, List, Literal, Optional, Sequence, TypedDict
 )
 
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
-from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import (
-    BaseMessage, 
-    HumanMessage, 
-    AIMessage, 
-    ToolMessage,
-    SystemMessage
-)
-from langchain_core.tools import BaseTool
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import (
+    AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+)
 from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import BaseTool
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -53,6 +41,10 @@ class AgentConfig(BaseModel):
         default=None,
         description="System message to prepend to conversations"
     )
+    max_workers: int = Field(
+        default=4,
+        description="Maximum number of worker threads for tool execution"
+    )
 
 
 class TimeoutError(Exception):
@@ -64,25 +56,7 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     iteration_count: int
     start_time: float
-    errors: List[Dict[str, Any]]  # keep error tracking for observability/debugging
-
-
-@contextmanager
-def timeout(seconds: float):
-    """Context manager for timing out operations."""
-    def timeout_handler(signum, frame):
-        raise TimeoutError(f"Operation timed out after {seconds} seconds")
-    
-    # Set the signal handler
-    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    
-    try:
-        yield
-    finally:
-        # Restore the old handler
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, old_handler)
+    errors: List[Dict[str, Any]]
 
 
 class ReActAgent:
@@ -99,13 +73,20 @@ class ReActAgent:
         self.checkpointer = checkpointer or MemorySaver()
 
         self.llm_with_tools = self.llm.bind_tools(tools)
-
         self.tools_by_name = {t.name: t for t in tools}
 
+        # thread pool for tool execution with proper timeout support
+        self.executor = ThreadPoolExecutor(max_workers=self.config.max_workers)
+
         self.graph = self._build_graph()
-        
+
         logger.info(f"ReAct agent initialized with {len(tools)} tools")
     
+    def __del__(self):
+        # cleanup thread pool on deletion
+        if hasattr(self, "executor"):
+            self.executor.shutdown(wait=False)
+
     def _build_graph(self) -> Any:
         workflow = StateGraph(AgentState)
 
@@ -135,10 +116,10 @@ class ReActAgent:
             logger.warning(f"Max iterations ({self.config.max_iterations}) reached")
 
             summary = self._generate_summary(messages)
-            AIMessage(
+            message = AIMessage(
                 content=(
                     f"I've reached the maximum number of reasoning steps ({self.config.max_iterations}). "
-                    f"Here's the summary based on the information I was able to gather:\n\n{summary}"
+                    f"Here's what I found:\n\n{summary}"
                 )
             )
             return {
@@ -154,8 +135,8 @@ class ReActAgent:
             summary = self._generate_summary(messages)
             message = AIMessage(
                 content=(
-                    f"I've reached the time limit for this query. {summary}"
-                    f"Here's the summary based on the information I was able to gather:\n\n{summary}"
+                    f"I've reached the time limit for this query. "
+                    f"Here's what I found:\n\n{summary}"
                 )
             )
             return {
@@ -170,7 +151,7 @@ class ReActAgent:
         
         # invoke agent
         try:
-            logger.info(f"Agent reasoning (iteration {iteration})...")
+            logger.info(f"Agent reasoning (iteration {iteration + 1})...")
             response = self.llm_with_tools.invoke(messages)
 
             if hasattr(response, "tool_calls") and response.tool_calls:
@@ -185,8 +166,7 @@ class ReActAgent:
 
         except Exception as e:
             logger.error(f"Agent node error: {e}", exc_info=True)
-            
-            # log error for observability
+
             error_record = {
                 "node": "agent",
                 "error": str(e),
@@ -205,6 +185,35 @@ class ReActAgent:
                 "iteration_count": iteration + 1,
                 "errors": [error_record]
             }
+    
+    def _execute_tool_with_timeout(
+        self, 
+        tool: BaseTool, 
+        tool_args: Dict[str, Any], 
+        timeout_seconds: float
+    ) -> Any:
+        """
+        Execute a tool with a timeout using ThreadPoolExecutor.
+        This works in any thread context (main or worker threads).
+        """
+        if timeout_seconds is None or timeout_seconds <= 0:
+            # No timeout, execute directly
+            return tool.invoke(tool_args)
+
+        # submit to thread pool and wait with timeout
+        future = self.executor.submit(tool.invoke, tool_args)        
+        try:
+            result = future.result(timeout=timeout_seconds)
+            return result
+        except FuturesTimeoutError:
+            # cancel the future (note: this doesn't kill the thread, but prevents waiting)
+            future.cancel()
+            raise TimeoutError(
+                f"Tool execution timed out after {timeout_seconds} seconds"
+            )
+        except Exception as e:
+            # re-raise any other exception from tool execution
+            raise
     
     def _tools_node(self, state: AgentState) -> Dict[str, Any]:
         last_message = state["messages"][-1]
@@ -233,13 +242,15 @@ class ReActAgent:
                     
                     tool = self.tools_by_name[tool_name]
 
-                    try:
-                        with timeout(self.config.tool_execution_timeout):
-                            result = tool.invoke(tool_args)
-                    except TimeoutError as te:
-                        raise TimeoutError(
-                            f"Tool execution timed out after {self.config.tool_execution_timeout}s"
-                        )
+                    # execute with thread-based timeout
+                    # (works in any thread context, needed for streamlit)
+                    start_time = time.time()
+                    result = self._execute_tool_with_timeout(
+                        tool, 
+                        tool_args, 
+                        self.config.tool_execution_timeout
+                    )
+                    elapsed = time.time() - start_time
 
                     tool_messages.append(
                         ToolMessage(
@@ -249,8 +260,39 @@ class ReActAgent:
                         )
                     )
 
-                    logger.info(f"Tool {tool_name} executed successfully")
+                    logger.info(
+                        f"Tool {tool_name} executed successfully in {elapsed:.2f}s"
+                    )
                     break
+
+                except TimeoutError as te:
+                    logger.error(f"Tool {tool_name} timed out: {te}")
+
+                    if attempt < self.config.max_tool_retries:
+                        wait_time = 0.5 * (2 ** attempt)
+                        logger.info(f"Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        error_msg = (
+                            f"Tool '{tool_name}' timed out after {self.config.max_tool_retries + 1} attempts. "
+                            f"Each attempt exceeded {self.config.tool_execution_timeout}s timeout."
+                        )
+                        tool_messages.append(
+                            ToolMessage(
+                                content=error_msg,
+                                tool_call_id=tool_id,
+                                name=tool_name
+                            )
+                        )
+                        error_record = {
+                            "node": "tools",
+                            "tool": tool_name,
+                            "error": str(te),
+                            "error_type": "TimeoutError",
+                            "attempts": self.config.max_tool_retries + 1,
+                            "timestamp": time.time()
+                        }
+                        errors.append(error_record)
 
                 except Exception as e:
                     logger.error(
@@ -291,37 +333,37 @@ class ReActAgent:
     def _route_after_agent(self, state: AgentState) -> Literal["tools", "end"]:
         last_message = state["messages"][-1]
 
-        # if this was an error response (no tool calls possible)
         if not hasattr(last_message, "tool_calls"):
             return "end"
-
-        if last_message.tool_calls:
-            return "tools"
         
-        return "end"
+        if not last_message.tool_calls:
+            return "end"
+
+        return "tools"
 
     def _generate_summary(self, messages: List[BaseMessage]) -> str:
+        """Generate a summary of the conversation so far."""
         prompt = HumanMessage(
             content=(
                 "Summarize the conversation. Focus on the main facts, any uncertainties, "
                 "and recommend one next step. Do not repeat raw tool outputs verbatim; synthesize them. "
-                "Aim at responding to the user's original question as well as the provided material allows. "
+                "Aim at responding to the user's original question as well as the provided material allows."
             )
         )
-        messages = messages + [prompt]
+        messages_with_prompt = messages + [prompt]
         try:
-            with timeout(self.config.summary_timeout):
-                resp = self.llm.invoke(messages)
-                return resp.content.strip() if hasattr(resp, "content") else str(resp).strip()
+            resp = self.llm.invoke(messages_with_prompt)
+            return resp.content.strip() if hasattr(resp, "content") else str(resp).strip()
         except Exception as e:
-            logger.warning(f"Summary LLM failed: {e}")
-            return "I couldn't produce a summary due to a summarizer error."
+            logger.warning(f"Summary generation failed: {e}")
+            return "I couldn't produce a summary due to an error."
 
     def invoke(
         self,
         input_message: str,
         config: Optional[RunnableConfig] = None
     ) -> Dict[str, Any]:
+        """Execute the agent synchronously and return the final state."""
         logger.info("Starting agent execution...")
 
         initial_state = {
@@ -340,7 +382,7 @@ class ReActAgent:
                 f"time={execution_time:.2f}s, "
                 f"errors={len(final_state.get('errors', []))}"
             )
-            
+
             return final_state
             
         except Exception as e:
@@ -353,7 +395,8 @@ class ReActAgent:
         config: Optional[RunnableConfig] = None,
         stream_mode: Literal["messages", "updates"] = "messages"
     ) -> Generator[Any, Any, Any]:
-        logger.info("Starting agent execution...")
+        """Stream agent execution chunks in real-time."""
+        logger.info("Starting agent streaming execution...")
 
         initial_state = {
             "messages": [HumanMessage(content=input_message)],
@@ -370,8 +413,13 @@ class ReActAgent:
         except Exception as e:
             logger.exception("Agent execution failed!")
             err = {"error": str(e)}
-            yield err, None if stream_mode == "messages" else err
+            yield err if stream_mode != "messages" else (err, None)
 
         finally:
             duration = time.time() - initial_state["start_time"]
             logger.info(f"Agent execution finished in {duration:.2f}s")
+
+    def shutdown(self):
+        """Gracefully shutdown the thread pool executor."""
+        logger.info("Shutting down agent thread pool...")
+        self.executor.shutdown(wait=True)

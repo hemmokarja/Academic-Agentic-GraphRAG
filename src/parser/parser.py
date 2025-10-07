@@ -1,7 +1,7 @@
 import logging
 
-from rdflib import Graph, URIRef, Literal, RDF, RDFS, OWL
-from SPARQLWrapper import SPARQLWrapper, JSON, POST
+from rdflib import OWL, RDF, RDFS, Graph, Literal, URIRef
+from SPARQLWrapper import JSON, POST, SPARQLWrapper
 
 logger = logging.getLogger(__name__)
 

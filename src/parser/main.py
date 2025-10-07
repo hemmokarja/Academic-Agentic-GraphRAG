@@ -5,7 +5,6 @@ import os
 from parser import export
 from parser.parser import RDFNeo4jParser
 
-
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
