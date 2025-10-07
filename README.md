@@ -1,4 +1,6 @@
-# Academic-Agentic-GraphRAG
+# Agentic GraphRAG Engine for Academic Research
+
+⚠️ **Work in progress**
 
 ## 🔗 Connecting to Neo4J Desktop
 
