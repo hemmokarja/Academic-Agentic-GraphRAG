@@ -81,7 +81,6 @@ def chat(
     # sidebar with info
     with st.sidebar:
         tools = st.session_state.agent.tools
-        # tool_names_list = "".join([f"- `{t.name}`\n" for t in tools])
         tool_names_list = "\n".join([f"- `{t.name}`" for t in tools])
 
         st.header("ℹ️ About")
