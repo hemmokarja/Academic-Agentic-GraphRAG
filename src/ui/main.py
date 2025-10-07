@@ -1,8 +1,8 @@
 import streamlit as st
 from langchain_openai import ChatOpenAI
 
-from rag.agent.agent import AgentConfig, ReActAgent
-from rag.agent.tools.arithmetic import (
+from rag.agent import AgentConfig, ReActAgent
+from rag.tools.arithmetic import (
     add_numbers, divide_numbers, multiply_numbers, subtract_numbers
 )
 from ui import chat
