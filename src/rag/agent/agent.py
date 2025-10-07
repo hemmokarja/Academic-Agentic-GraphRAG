@@ -243,8 +243,136 @@ class ReActAgent:
         except Exception as e:
             # re-raise any other exception from tool execution
             raise
-    
+
+    def _execute_single_tool_call(
+        self, 
+        tool_call: Dict[str, Any], 
+        attempt_number: int
+    ) -> tuple[ToolMessage, Optional[Dict[str, Any]]]:
+        """
+        Execute a single tool call attempt.
+
+        Returns:
+            tuple: (ToolMessage, error_record or None)
+        """
+        tool_name = tool_call["name"]
+        tool_args = tool_call["args"]
+        tool_id = tool_call["id"]
+        
+        try:
+            if tool_name not in self.tools_by_name:
+                raise ValueError(f"Unknown tool: {tool_name}")
+
+            tool = self.tools_by_name[tool_name]
+
+            start_time = time.time()
+            result = self._execute_tool_with_timeout(
+                tool, 
+                tool_args, 
+                self.config.tool_execution_timeout
+            )
+            elapsed = time.time() - start_time
+
+            logger.info(
+                f"Tool {tool_name} executed successfully in {elapsed:.2f}s"
+            )
+
+            return (
+                ToolMessage(
+                    content=str(result),
+                    tool_call_id=tool_id,
+                    name=tool_name
+                ),
+                None
+            )
+
+        except TimeoutError as te:
+            logger.error(f"Tool {tool_name} timed out: {te}")
+
+            error_msg = (
+                f"Tool '{tool_name}' timed out after "
+                f"{self.config.max_tool_retries + 1} attempts. "
+                f"Each attempt exceeded {self.config.tool_execution_timeout}s timeout."
+            )
+            error_record = {
+                "node": "tools",
+                "tool": tool_name,
+                "error": str(te),
+                "error_type": "TimeoutError",
+                "attempts": self.config.max_tool_retries + 1,
+                "timestamp": time.time()
+            }
+            return (
+                ToolMessage(
+                    content=error_msg,
+                    tool_call_id=tool_id,
+                    name=tool_name
+                ),
+                error_record
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Tool {tool_name} failed (attempt "
+                f"{attempt_number + 1}/{self.config.max_tool_retries + 1}): {e}"
+            )
+
+            error_msg = (
+                f"Tool '{tool_name}' failed after "
+                f"{self.config.max_tool_retries + 1} attempts. "
+                f"Error: {str(e)}. Please try a different approach or "
+                "rephrase your query."
+            )
+            error_record = {
+                "node": "tools",
+                "tool": tool_name,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "attempts": self.config.max_tool_retries + 1,
+                "timestamp": time.time()
+            }
+            return (
+                ToolMessage(
+                    content=error_msg,
+                    tool_call_id=tool_id,
+                    name=tool_name
+                ),
+                error_record
+            )
+
+    def _execute_tool_call_with_retries(
+        self, 
+        tool_call: Dict[str, Any]
+    ) -> tuple[ToolMessage, Optional[Dict[str, Any]]]:
+        """
+        Execute a tool call with retry logic and exponential backoff.
+
+        Returns:
+            tuple: (ToolMessage, error_record or None)
+        """
+        tool_name = tool_call["name"]
+        logger.info(f"Executing tool: {tool_name}")
+        
+        for attempt in range(self.config.max_tool_retries + 1):
+            tool_message, error_record = self._execute_single_tool_call(
+                tool_call, attempt
+            )
+
+            # success case, no error record
+            if error_record is None:
+                return (tool_message, None)
+
+            # failure case, check if we should retry
+            if attempt < self.config.max_tool_retries:
+                wait_time = 0.5 * (2 ** attempt)
+                logger.info(f"Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                # final attempt failed, return error
+                return (tool_message, error_record)
+
     def _tools_node(self, state: AgentState) -> Dict[str, Any]:
+        """Execute all tool calls from the last agent message."""
         last_message = state["messages"][-1]
 
         if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
@@ -254,110 +382,14 @@ class ReActAgent:
         tool_messages = []
         errors = []
 
-        # Execute each tool call with retry logic
         for tool_call in last_message.tool_calls:
-            tool_name = tool_call["name"]
-            tool_args = tool_call["args"]
-            tool_id = tool_call["id"]
+            tool_message, error_record = self._execute_tool_call_with_retries(
+                tool_call
+            )
+            tool_messages.append(tool_message)
             
-            logger.info(f"Executing tool: {tool_name}")
-            
-            result = None
-
-            for attempt in range(self.config.max_tool_retries + 1):
-                try:
-                    if tool_name not in self.tools_by_name:
-                        raise ValueError(f"Unknown tool: {tool_name}")
-                    
-                    tool = self.tools_by_name[tool_name]
-
-                    # execute with thread-based timeout
-                    # (works in any thread context, needed for streamlit)
-                    start_time = time.time()
-                    result = self._execute_tool_with_timeout(
-                        tool, 
-                        tool_args, 
-                        self.config.tool_execution_timeout
-                    )
-                    elapsed = time.time() - start_time
-
-                    tool_messages.append(
-                        ToolMessage(
-                            content=str(result),
-                            tool_call_id=tool_id,
-                            name=tool_name
-                        )
-                    )
-
-                    logger.info(
-                        f"Tool {tool_name} executed successfully in {elapsed:.2f}s"
-                    )
-                    break
-
-                except TimeoutError as te:
-                    logger.error(f"Tool {tool_name} timed out: {te}")
-
-                    if attempt < self.config.max_tool_retries:
-                        wait_time = 0.5 * (2 ** attempt)
-                        logger.info(f"Retrying in {wait_time}s...")
-                        time.sleep(wait_time)
-                    else:
-                        error_msg = (
-                            f"Tool '{tool_name}' timed out after "
-                            f"{self.config.max_tool_retries + 1} attempts. "
-                            "Each attempt exceeded "
-                            f"{self.config.tool_execution_timeout}s timeout."
-                        )
-                        tool_messages.append(
-                            ToolMessage(
-                                content=error_msg,
-                                tool_call_id=tool_id,
-                                name=tool_name
-                            )
-                        )
-                        error_record = {
-                            "node": "tools",
-                            "tool": tool_name,
-                            "error": str(te),
-                            "error_type": "TimeoutError",
-                            "attempts": self.config.max_tool_retries + 1,
-                            "timestamp": time.time()
-                        }
-                        errors.append(error_record)
-
-                except Exception as e:
-                    logger.error(
-                        f"Tool {tool_name} failed (attempt "
-                        f"{attempt + 1}/{self.config.max_tool_retries + 1}): {e}"
-                    )
-
-                    if attempt < self.config.max_tool_retries:
-                        wait_time = 0.5 * (2 ** attempt)
-                        logger.info(f"Retrying in {wait_time}s...")
-                        time.sleep(wait_time)
-                    else:
-                        error_msg = (
-                            f"Tool '{tool_name}' failed after "
-                            f"{self.config.max_tool_retries + 1} attempts. "
-                            f"Error: {str(e)}. Please try a different approach or "
-                            "rephrase your query."
-                        )
-                        tool_messages.append(
-                            ToolMessage(
-                                content=error_msg,
-                                tool_call_id=tool_id,
-                                name=tool_name
-                            )
-                        )
-                        error_record = {
-                            "node": "tools",
-                            "tool": tool_name,
-                            "error": str(e),
-                            "error_type": type(e).__name__,
-                            "attempts": self.config.max_tool_retries + 1,
-                            "timestamp": time.time()
-                        }
-                        errors.append(error_record)
+            if error_record is not None:
+                errors.append(error_record)
         
         return {
             "messages": tool_messages,
