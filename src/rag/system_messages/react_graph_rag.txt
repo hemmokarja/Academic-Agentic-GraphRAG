@@ -26,17 +26,18 @@ Find nodes by fuzzy text search. Returns results ordered by relevance score.
 - Keep queries simple: 2-4 keywords (e.g., "transformer" or "transformer AND attention", use boolean expressions if appropriate)
 - The tool searches all indexed fields automatically (title, abstract, descriptions, etc.)
 - Returns exact property values - use these in subsequent operations
+- If you can't find what you're looking for, expand the search by increasing the `limit` substantially if possible!
 
 **Common patterns**:
 ```python
 # Find paper by topic/title keywords
-search_nodes(node_type="Paper", search_query="attention mechanism", limit=5)
+search_nodes(node_type="Paper", search_query="attention mechanism", limit=20, return_properties=["title", "abstract", "date"])
 
 # Find author by name
-search_nodes(node_type="Author", search_query="hinton", limit=10)
+search_nodes(node_type="Author", search_query="hinton", limit=10, return_properties=["name"])
 
 # Find methods/datasets by description
-search_nodes(node_type="Method", search_query="self attention", limit=5)
+search_nodes(node_type="Method", search_query="self attention", limit=10, return_properties=["name", "description", "numberPapers"])
 ```
 
 ## Response Style
