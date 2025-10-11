@@ -1,6 +1,7 @@
 class StreamHandler:
-    def __init__(self):
+    def __init__(self, show_tool_results=False):
         self.last_iteration = 0
+        self.show_tool_results = show_tool_results
 
     def process_chunk(self, chunk):
         """
@@ -51,7 +52,12 @@ class StreamHandler:
                 tool_message = messages[0]
                 tool_name = tool_message.name if hasattr(tool_message, "name") else "unknown"
                 result = tool_message.content if hasattr(tool_message, "content") else ""
-                output += f"✅ **Tool result:** `{tool_name}` → `{result}`\n\n"
+                tool_result = f"✅ **Tool result:** `{tool_name}` "
+                if self.show_tool_results:
+                    tool_result += f"→ `{result}`\n\n"
+                else:
+                    tool_result += f"success!\n\n"
+                output += tool_result
 
                 # after a successful tool execution, show next thinking message
                 next_iteration = self.last_iteration + 1

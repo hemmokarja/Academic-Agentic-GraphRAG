@@ -12,6 +12,7 @@ DEFAULT_SUBTITLE = (
 
 def chat(
     agent,
+    show_tool_results=False,
     page_title=DEFAULT_TITLE,
     page_subtitle=DEFAULT_SUBTITLE,
 ):
@@ -50,7 +51,7 @@ def chat(
             message_placeholder = st.empty()
             full_response = ""
 
-            handler = StreamHandler()
+            handler = StreamHandler(show_tool_results)
             config = {"configurable": {"thread_id": st.session_state.thread_id}}
             
             # Start with initial thinking message

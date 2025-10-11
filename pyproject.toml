@@ -24,7 +24,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["rag*", "parser*", "ui*"]
+include = ["neo4j_parser*", "rag*", "ui*"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

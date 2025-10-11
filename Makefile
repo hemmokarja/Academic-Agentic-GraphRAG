@@ -17,7 +17,7 @@ TTL_FILENAME=linkedpaperswithcode_2024-09-05.ttl
 OWL_FILENAME=linkedpaperswithcode-ontology.owl
 
 export RAW_DATA_DIR DATA_DIR IMPORT_DIR MIRROR_BASE_URL TTL_FILENAME OWL_FILENAME
-export CONTAINER_NAME NEO4J_PASSWORD NEO4J_DB 
+export CONTAINER_NAME NEO4J_PASSWORD NEO4J_DB
 
 .PHONY: setup start setup-files parse-files pull import-neo4j run-neo4j create-indexes stop clean
 
@@ -28,7 +28,7 @@ setup-files:
 	@./scripts/setup-files.sh
 
 parse-files:
-	@uv run python src/parser/main.py \
+	@uv run python src/neo4j_parser/main.py \
 		--raw-data-dir $(RAW_DATA_DIR) \
 		--import-dir $(IMPORT_DIR) \
 		--ttl-filename $(TTL_FILENAME) \
@@ -72,6 +72,9 @@ create-indexes:
 stop:
 	@docker rm -f $(CONTAINER_NAME) 2>/dev/null || true
 	@echo "Neo4J container stopped and removed"
+
+chat:
+	@NEO4J_URI=bolt://localhost:$(BOLT_PORT) uv run streamlit run src/ui/main.py
 
 clean: stop
 	@rm -rf $(NEO4J_DIR)

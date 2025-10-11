@@ -2,8 +2,8 @@ import argparse
 import logging
 import os
 
-from parser import export
-from parser.parser import RDFNeo4jParser
+from neo4j_parser import export
+from neo4j_parser.parser import RDFNeo4jParser
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
