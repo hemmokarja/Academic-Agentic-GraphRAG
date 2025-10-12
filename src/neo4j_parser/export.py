@@ -55,30 +55,6 @@ def _infer_property_types(nodes):
     return property_to_dtype
 
 
-def write_nodes(nodes, filepath="nodes.csv"):
-    """Write nodes with dynamic Neo4j type annotations in header."""
-    properties = _collect_all_properties(nodes)
-    property_to_dtype = _infer_property_types(nodes)
-
-    with open(filepath, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        prop_headers = [f"{prop}:{property_to_dtype[prop]}" for prop in properties]
-        headers = ["nodeId:ID", ":LABEL"] + prop_headers
-        writer.writerow(headers)
-
-        for node_id, node in nodes.items():
-            row = [str(node_id), node["label"]]
-            for p in properties:
-                value = node["properties"].get(p)
-                if isinstance(value, (list, tuple)):
-                    # join list into semicolon-separated string
-                    value = ";".join(map(str, value))
-                row.append(value)
-            writer.writerow(row)
-
-    logger.info(f"Written {len(nodes)} node records to {filepath}")
-
-
 def write_nodes(nodes, filepath="nodes.csv", array_delimiter="|"):
     properties = _collect_all_properties(nodes)
     property_to_dtype = _infer_property_types(nodes)
