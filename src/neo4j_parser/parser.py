@@ -51,18 +51,21 @@ def _reverse_citations(uri_to_meta):
 def _make_lpwc_to_semopenalex(paper_nodes):
     """Map LPWC RDF URI to SemOpenAlex URIs"""
     lpwc_to_semopenalex = {}
-    for node_id, node in paper_nodes.items():
+    for lpwc_uri, node in paper_nodes.items():
         if "sameAs" in node["properties"]:
-            lpwc_to_semopenalex[node_id] = node["properties"]["sameAs"]
+            lpwc_to_semopenalex[lpwc_uri] = node["properties"]["sameAs"]
     return lpwc_to_semopenalex
 
 
-def _reverse_to_semopenalex_to_lpwc(lpwc_to_semopenalex):
+def _reverse_to_semopenalex_to_lpwcs(lpwc_to_semopenalex):
     """
     Reverse the mapping. Note, that in rare cases, one SemOpenAlex URI may map on to 
-    several LPWC URIs, but we select randomly only one.
+    several LPWC URIs, hence the list.
     """
-    return {v: k for k, v in lpwc_to_semopenalex.items()}
+    semopenalex_to_lpwc = defaultdict(list)
+    for lpwc_uri, semopenalex_uri in lpwc_to_semopenalex.items():
+        semopenalex_to_lpwc[semopenalex_uri].append(lpwc_uri)
+    return semopenalex_to_lpwc
 
 
 class RDFNeo4jParser:
@@ -296,14 +299,14 @@ class RDFNeo4jParser:
         uri_to_meta = _prune_citers(uri_to_meta, semopenalex_uris)
 
         lpwc_to_semopenalex = _make_lpwc_to_semopenalex(paper_nodes)
-        semopenalex_to_lpwc = _reverse_to_semopenalex_to_lpwc(lpwc_to_semopenalex)
+        semopenalex_to_lpwcs = _reverse_to_semopenalex_to_lpwcs(lpwc_to_semopenalex)
 
         # add metadata to properties
-        for node_id, node in paper_nodes.items():
-            if not node_id in lpwc_to_semopenalex:
+        for lpwc_uri, node in paper_nodes.items():
+            if not lpwc_uri in lpwc_to_semopenalex:
                 continue
 
-            semopenalex_uri = lpwc_to_semopenalex[node_id]
+            semopenalex_uri = lpwc_to_semopenalex[lpwc_uri]
             if not semopenalex_uri in uri_to_meta:
                 continue
 
@@ -314,12 +317,14 @@ class RDFNeo4jParser:
         # add citation relationships
         citer_to_cited = _reverse_citations(uri_to_meta)
         for citer, citeds in citer_to_cited.items():
-            citer_lpwc_uri = semopenalex_to_lpwc[citer]
-            for cited in citeds:
-                cited_lpwc_uri = semopenalex_to_lpwc[cited]
-                self.relationships.append(
-                    (URIRef(citer_lpwc_uri), "CITES", URIRef(cited_lpwc_uri))
-                )
+            citer_lpwc_uris = semopenalex_to_lpwcs[citer]
+            for citer_lpwc_uri in citer_lpwc_uris:
+                for cited in citeds:
+                    cited_lpwc_uris = semopenalex_to_lpwcs[cited]
+                    for cited_lpwc_uri in cited_lpwc_uris:
+                        self.relationships.append(
+                            (citer_lpwc_uri, "CITES", cited_lpwc_uri)
+                        )
 
         logger.info("Enriched paper nodes and relationships")
 
