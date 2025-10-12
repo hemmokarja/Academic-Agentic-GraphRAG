@@ -1,9 +1,18 @@
-from typing import Literal, Optional, List, Dict, Any
+from typing import Literal, List, Dict, Any
 
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from rag import driver as driver_module
+
+VALID_PROPERTIES = {
+    "Paper": ["title", "date", "abstract", "hasUrl", "hasArXivId"],
+    "Author": ["name"],
+    "Model": ["name", "numberPapers", "introducedYear"],
+    "Dataset": ["name", "description", "numberPapers"],
+    "Task": ["name", "description"],
+    "Method": ["name", "description", "numberPapers", "introducedYear", "codeSnippet", "source"],
+}
 
 
 class FuzzySearchInput(BaseModel):
@@ -20,12 +29,12 @@ class FuzzySearchInput(BaseModel):
         )
     )
     limit: int = Field(
-        default=10,
+        default=20,
         ge=1,
         le=50,
         description="Maximum number of results to return (ordered by relevance)"
     )
-    return_properties: Optional[List[str]] = Field(
+    return_properties: List[str] = Field(
         description=(
             "Specific properties to return. Choose based on the node type."
             "Paper: title, date, abstract, hasUrl, hasArXivId | "
@@ -43,13 +52,30 @@ class FuzzySearchInput(BaseModel):
         ]
     )
 
+    @field_validator("return_properties")
+    @classmethod
+    def validate_properties(cls, v, info):
+        if v is None:
+            return v
+        
+        node_type = info.data.get("node_type")
+        if node_type:
+            valid_props = VALID_PROPERTIES.get(node_type, [])
+            invalid = [p for p in v if p not in valid_props]
+            if invalid:
+                raise ValueError(
+                    f"Invalid properties for {node_type}: {invalid}. "
+                    f"Valid options: {valid_props}"
+                )
+        return v
+
 
 @tool(args_schema=FuzzySearchInput)
 def search_nodes(
     node_type: str,
     search_query: str,
-    limit: int = 10,
-    return_properties: Optional[List[str]] = None
+    limit: int,
+    return_properties: List[str]
 ) -> List[Dict[str, Any]]:
     """
     Search for nodes in the knowledge graph using full-text search with relevance
@@ -93,7 +119,7 @@ def _search_nodes_tx(
     node_type: str,
     search_query: str,
     limit: int,
-    return_properties: Optional[List[str]],
+    return_properties: List[str],
 ):
     """Transaction function to execute full-text search query."""
     index_map = {
@@ -109,23 +135,13 @@ def _search_nodes_tx(
     if not index_name:
         raise ValueError(f"No index found for node type: {node_type}")
 
-    default_properties = {
-        "Paper": ["title", "date", "abstract", "hasArXivId", "hasUrl"],
-        "Author": ["name"],
-        "Model": ["name", "numberPapers", "introducedYear"],
-        "Dataset": ["title", "description"],
-        "Task": ["name", "description"],
-        "Method": ["name", "description", "fullname", "numberPapers"],
-    }
-    props_to_return = return_properties or default_properties.get(node_type, ["name"])
-
     params = {
         "index_name": index_name,
         "search_query": search_query,
         "limit": limit
     }
 
-    return_items = [f"node.{prop} AS {prop}" for prop in props_to_return]
+    return_items = [f"node.{prop} AS {prop}" for prop in return_properties]
     return_clause = ", ".join(return_items) + ", score"
 
     query = f"""
@@ -140,7 +156,7 @@ def _search_nodes_tx(
 
     records = []
     for record in result:
-        node_data = {prop: record[prop] for prop in props_to_return}
+        node_data = {prop: record[prop] for prop in return_properties}
         node_data["node_type"] = node_type
         node_data["relevance_score"] = record["score"]
         records.append(node_data)
