@@ -123,7 +123,7 @@ def _search_nodes_tx(
 ):
     """Transaction function to execute full-text search query."""
     index_map = {
-        "Paper": "paper_search",
+        "Paper": "paper_title_search",
         "Author": "author_search",
         "Model": "model_search",
         "Dataset": "dataset_search",

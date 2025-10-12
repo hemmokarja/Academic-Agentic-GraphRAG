@@ -2,6 +2,9 @@
 CREATE FULLTEXT INDEX paper_search 
 FOR (n:Paper) ON EACH [n.title, n.abstract];
 
+CREATE FULLTEXT INDEX paper_title_search 
+FOR (n:Paper) ON EACH [n.title];
+
 CREATE FULLTEXT INDEX method_search 
 FOR (n:Method) ON EACH [n.name, n.description, n.fullname];
 

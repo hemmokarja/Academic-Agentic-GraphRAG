@@ -19,7 +19,7 @@ OWL_FILENAME=linkedpaperswithcode-ontology.owl
 export RAW_DATA_DIR DATA_DIR IMPORT_DIR MIRROR_BASE_URL TTL_FILENAME OWL_FILENAME
 export CONTAINER_NAME NEO4J_PASSWORD NEO4J_DB
 
-.PHONY: setup start setup-files parse-files pull import-neo4j run-neo4j create-indexes stop clean
+.PHONY: setup start setup-files parse-files pull import-neo4j run-neo4j create-indexes stop chat clean
 
 setup: setup-files parse-files pull import-neo4j run-neo4j create-indexes
 start: run-neo4j
