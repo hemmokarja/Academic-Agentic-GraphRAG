@@ -68,6 +68,71 @@ def _reverse_to_semopenalex_to_lpwcs(lpwc_to_semopenalex):
     return semopenalex_to_lpwc
 
 
+def _try_convert_to_number(value):
+    """
+    Try to convert a single value to int or float.
+    Returns the converted value or the original if conversion fails.
+    """
+    if not isinstance(value, str):
+        return value
+
+    value = value.strip()
+    
+    if not value:
+        return value
+    
+    try:
+        # try int first (avoids converting "42" to 42.0)
+        if "." not in value and "e" not in value.lower():
+            return int(value)
+        else:
+            return float(value)
+    except ValueError:
+        # not a number, return original string
+        return value
+
+
+def _convert_strings_to_numericals(nodes):
+    """Convert string properties to int/float where possible."""
+    for node in nodes.values():
+        properties = node["properties"]
+        for prop_name, prop_value in properties.items():
+            if isinstance(prop_value, list):
+                properties[prop_name] = [
+                    _try_convert_to_number(v) for v in prop_value
+                ]
+            else:
+                properties[prop_name] = _try_convert_to_number(prop_value)
+    
+    return nodes
+
+
+def _normalize_properties_to_lists(nodes):
+    """Convert properties to lists if any node has that property as a list."""
+
+    # first pass: identify which properties should be lists
+    list_properties = defaultdict(set)  # {property_name: {label1, label2, ...}}
+
+    for node in nodes.values():
+        for prop_name, prop_value in node["properties"].items():
+            if isinstance(prop_value, list):
+                list_properties[prop_name].add(node["label"])
+
+    # second pass: normalize properties to lists where needed
+    for node in nodes.values():
+        for prop_name, prop_value in node["properties"].items():
+
+            # if this property should be a list for this label type
+            if (
+                prop_name in list_properties
+                and node["label"] in list_properties[prop_name]
+            ):
+                if not isinstance(prop_value, list):
+                    node["properties"][prop_name] = [prop_value]
+
+    return nodes
+
+
 class RDFNeo4jParser:
     """
     Parses RDF TTL and OWL files into Neo4j-compatible nodes and relationships.
@@ -328,6 +393,12 @@ class RDFNeo4jParser:
 
         logger.info("Enriched paper nodes and relationships")
 
+    def _post_process_nodes(self):
+        # TODO clean list names
+        self.nodes = _convert_strings_to_numericals(self.nodes)
+        self.nodes = _normalize_properties_to_lists(self.nodes)
+        logger.info("Post-processed nodes")
+
     def parse(self):
         logger.info("Starting to process RDF files into nodes and relationships...")
         self._parse_files()
@@ -340,6 +411,8 @@ class RDFNeo4jParser:
 
         if self.enrich_papers:
             self._enrich_paper_nodes()
+
+        self._post_process_nodes()
 
         logger.info(
             f"Finished processing! Collected {len(self.nodes)} nodes and "
