@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from rag import driver as driver_module
 
 VALID_PROPERTIES = {
-    "Paper": ["title", "date", "abstract", "hasUrl", "hasArXivId"],
+    "Paper": ["title", "date", "citationCount", "abstract", "hasUrl", "hasArXivId"],
     "Author": ["name"],
     "Model": ["name", "numberPapers", "introducedYear"],
     "Dataset": ["name", "description", "numberPapers"],
@@ -37,7 +37,7 @@ class FuzzySearchInput(BaseModel):
     return_properties: List[str] = Field(
         description=(
             "Specific properties to return. Choose based on the node type."
-            "Paper: title, date, abstract, hasUrl, hasArXivId | "
+            "Paper: title, date, citationCount, abstract, hasUrl, hasArXivId | "
             "Author: name | "
             "Model: name, numberPapers | "
             "Dataset: name, description, numberPapers |"

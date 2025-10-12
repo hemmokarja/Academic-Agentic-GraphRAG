@@ -1,16 +1,13 @@
 import logging
-import ssl
-import urllib
+from collections import defaultdict
 
-import certifi
 from rdflib import OWL, RDF, RDFS, Graph, Literal, URIRef
-from SPARQLWrapper import JSON, POST, SPARQLWrapper
+
+from neo4j_parser.enricher import SemOpenAlexEnricher
 
 logger = logging.getLogger(__name__)
 
 AUTHOR_URI = "http://purl.org/dc/terms/creator"
-
-_ssl_warning_logged = False
 
 
 def _to_pascal_case(s):
@@ -34,90 +31,55 @@ def _to_camel_case(s):
     return words[0].lower() + ''.join(w.capitalize() for w in words[1:])
 
 
-def _to_bathces(lst, batch_size):
-    batches = []
-    for i in range(0, len(lst), batch_size):
-        batches.append(lst[i: i + batch_size])
-    return batches
+def _prune_citers(uri_to_meta, semopenalex_uris):
+    """Remove citers that don't exist in graph."""
+    known_uris = set(semopenalex_uris)
+    for meta in uri_to_meta.values():
+        meta["citedBy"] = [c for c in meta["citedBy"] if c in known_uris]
+    return uri_to_meta
 
 
-def _to_sparql_string(author_uris):
-    strings = [f"<{u}>" for u in author_uris]
-    return "\n".join(strings)
+def _reverse_citations(uri_to_meta):
+    """Reverses a cited-by relationship to cites relationships."""
+    citer_to_cited = defaultdict(list)
+    for cited_uri, meta in uri_to_meta.items():
+        for citer_uri in meta["citedBy"]:
+            citer_to_cited[citer_uri].append(cited_uri)
+    return dict(citer_to_cited)
 
 
-def _query_names(sparql, author_uris):
-    author_uris_string = _to_sparql_string(author_uris)
-    query = f"""
-    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-    SELECT ?author ?name
-    WHERE {{
-        VALUES ?author {{
-        {author_uris_string}
-        }}
-        ?author foaf:name ?name .
-    }}
+def _make_lpwc_to_semopenalex(paper_nodes):
+    """Map LPWC RDF URI to SemOpenAlex URIs"""
+    lpwc_to_semopenalex = {}
+    for node_id, node in paper_nodes.items():
+        if "sameAs" in node["properties"]:
+            lpwc_to_semopenalex[node_id] = node["properties"]["sameAs"]
+    return lpwc_to_semopenalex
+
+
+def _reverse_to_semopenalex_to_lpwc(lpwc_to_semopenalex):
     """
-
-    sparql.setQuery(query)
-    sparql.setReturnFormat(JSON)
-
-    try:
-        results = sparql.query().convert()  # normal secure query first
-    except Exception as e:
-        global _ssl_warning_logged
-
-        if "CERTIFICATE_VERIFY_FAILED" in str(e):
-            if not _ssl_warning_logged:
-                logger.warning(
-                    "SSL verification failed for SemOpenAlex — retrying with "
-                    "unverified SSL context. This is likely due to an expired "
-                    "certificate on their server."
-                )
-                _ssl_warning_logged = True
-
-            unverified = ssl._create_unverified_context()
-            opener = urllib.request.build_opener(
-                urllib.request.HTTPSHandler(context=unverified)
-            )
-            urllib.request.install_opener(opener)
-            results = sparql.query().convert()
-        else:
-            raise
-
-    result_dict = {}
-    for result in results["results"]["bindings"]:
-        author_uri = result["author"]["value"]
-        name = result["name"]["value"]
-        result_dict[author_uri] = name
-
-    return result_dict
-
-
-def _fetch_author_names(author_nodes, batch_size):
-    author_uris = [n["properties"]["uri"] for n in author_nodes]
-
-    # patch SSL context that trusts current root CAs
-    context = ssl.create_default_context(cafile=certifi.where())
-    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context))
-    urllib.request.install_opener(opener)
-
-    sparql = SPARQLWrapper("https://semopenalex.org/sparql")
-    sparql.setMethod(POST)
-
-    uri_to_name = {}
-    for uri_batch in _to_bathces(author_uris, batch_size):
-        batch_uri_to_name = _query_names(sparql, uri_batch)
-        uri_to_name.update(batch_uri_to_name)
-
-    return uri_to_name
+    Reverse the mapping. Note, that in rare cases, one SemOpenAlex URI may map on to 
+    several LPWC URIs, but we select randomly only one.
+    """
+    return {v: k for k, v in lpwc_to_semopenalex.items()}
 
 
 class RDFNeo4jParser:
-    def __init__(self, ttl_filepath, owl_filepath, enrich_authors=True):
+    """
+    Parses RDF TTL and OWL files into Neo4j-compatible nodes and relationships.
+
+    Author and paper nodes can optionally be enriched with metadata from the
+    SemOpenAlex SPARQL endpoint, adding details such as author names, publication
+    years, and citation links.
+    """
+    def __init__(
+        self, ttl_filepath, owl_filepath, enrich_authors=True, enrich_papers=True
+    ):
         self.ttl_filepath = ttl_filepath
         self.owl_filepath = owl_filepath
-        self.enrich_authors = enrich_authors  # fetch names from SemOpenAlex SPARQL endpoint
+        self.enrich_authors = enrich_authors
+        self.enrich_papers = enrich_papers
 
         self.g = Graph()
 
@@ -147,6 +109,9 @@ class RDFNeo4jParser:
         self.ignore_labels = {
             "owl#Class", "owl#ObjectProperty", "owl#DatatypeProperty", "owl#Ontology"
         }
+
+        if self.enrich_authors or self.enrich_papers:
+            self.enricher = SemOpenAlexEnricher()
 
     def _parse_files(self):
         """Parse TTL and OWL files into a single RDF graph."""
@@ -305,14 +270,58 @@ class RDFNeo4jParser:
         logger.info("Nodes and relationships built")
 
     def _enrich_author_nodes(self, batch_size=30_000):
+        logger.info("Starting to enrich author nodes...")
         author_nodes = [n for n in self.nodes.values() if n["label"] == "Author"]
-        uri_to_name = _fetch_author_names(author_nodes, batch_size)
+        author_uris = [n["properties"]["uri"] for n in author_nodes]
+        uri_to_meta = self.enricher.fetch_author_metadata(author_uris, batch_size)
         for node in author_nodes:
             uri = node["properties"]["uri"]
-            if uri in uri_to_name:
-                node["properties"]["name"] = uri_to_name[uri]
-        
+            if uri in uri_to_meta:
+                node["properties"]["name"] = uri_to_meta[uri]["name"]
+
         logger.info("Enriched author nodes with names")
+
+    def _enrich_paper_nodes(self, batch_size=10_000):
+        logger.info("Starting to enrich paper nodes (this might take a while)...")
+
+        paper_nodes = {id_: n for id_, n in self.nodes.items() if n["label"] == "Paper"}
+        semopenalex_uris = [
+            n["properties"]["sameAs"]
+            for n in paper_nodes.values()
+            if "sameAs" in n["properties"]
+        ]
+        semopenalex_uris = list(set(semopenalex_uris))
+
+        uri_to_meta = self.enricher.fetch_paper_metadata(semopenalex_uris, batch_size)
+        uri_to_meta = _prune_citers(uri_to_meta, semopenalex_uris)
+
+        lpwc_to_semopenalex = _make_lpwc_to_semopenalex(paper_nodes)
+        semopenalex_to_lpwc = _reverse_to_semopenalex_to_lpwc(lpwc_to_semopenalex)
+
+        # add metadata to properties
+        for node_id, node in paper_nodes.items():
+            if not node_id in lpwc_to_semopenalex:
+                continue
+
+            semopenalex_uri = lpwc_to_semopenalex[node_id]
+            if not semopenalex_uri in uri_to_meta:
+                continue
+
+            meta = uri_to_meta[semopenalex_uri]
+            node["properties"]["year"] = meta["year"]
+            node["properties"]["citationCount"] = len(meta["citedBy"])
+
+        # add citation relationships
+        citer_to_cited = _reverse_citations(uri_to_meta)
+        for citer, citeds in citer_to_cited.items():
+            citer_lpwc_uri = semopenalex_to_lpwc[citer]
+            for cited in citeds:
+                cited_lpwc_uri = semopenalex_to_lpwc[cited]
+                self.relationships.append(
+                    (URIRef(citer_lpwc_uri), "CITES", URIRef(cited_lpwc_uri))
+                )
+
+        logger.info("Enriched paper nodes and relationships")
 
     def parse(self):
         logger.info("Starting to process RDF files into nodes and relationships...")
@@ -323,6 +332,9 @@ class RDFNeo4jParser:
 
         if self.enrich_authors:
             self._enrich_author_nodes()
+
+        if self.enrich_papers:
+            self._enrich_paper_nodes()
 
         logger.info(
             f"Finished processing! Collected {len(self.nodes)} nodes and "

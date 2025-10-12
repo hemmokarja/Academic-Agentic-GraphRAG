@@ -68,7 +68,9 @@ if __name__ == "__main__":
     ttl_filepath = os.path.join(raw_data_dir, args.ttl_filename)
     owl_filepath = os.path.join(raw_data_dir, args.owl_filename)
 
-    parser = RDFNeo4jParser(ttl_filepath, owl_filepath, enrich_authors=True)
+    parser = RDFNeo4jParser(
+        ttl_filepath, owl_filepath, enrich_authors=True, enrich_papers=True
+    )
     nodes, relationships = parser.parse()
 
     export.write_nodes(nodes, nodes_filepath)
