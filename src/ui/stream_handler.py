@@ -5,15 +5,18 @@ class StreamHandler:
         self.pending_tool_calls = set()  # track pending tool calls
 
     def _format_agent_tool_calls(self, message):
-        # only one tool call
-        if len(message.tool_calls) == 1:
-            tool_call = message.tool_calls[0]
+
+        def _extract_details(tool_call):
             tool_id = tool_call.get("id", "unknown")
             tool_name = tool_call.get("name", "unknown")
             tool_args = tool_call.get("args", {})
+            return tool_id, tool_name, tool_args
 
+        # only one tool call
+        if len(message.tool_calls) == 1:
+            tool_call = message.tool_calls[0]
+            tool_id, tool_name, tool_args = _extract_details(tool_call)
             self.pending_tool_calls.add(tool_id)
-
             return (
                 f"🔧 **Calling tool:** `{tool_name}` (ID: `{tool_id}`) "
                 f"**Args**: `{tool_args}`\n\n"
@@ -24,12 +27,8 @@ class StreamHandler:
             output = f"🔧 **Calling {len(message.tool_calls)} tools:**\n\n"
 
             for tool_call in message.tool_calls:
-                tool_id = tool_call.get('id', 'unknown')
-                tool_name = tool_call.get('name', 'unknown')
-                tool_args = tool_call.get('args', {})
-
+                tool_id, tool_name, tool_args = _extract_details(tool_call)
                 self.pending_tool_calls.add(tool_id)
-
                 output += (
                     f"  • `{tool_name}` (ID: `{tool_id}`) **Args**: `{tool_args}`\n\n"
                 )
