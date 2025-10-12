@@ -59,71 +59,79 @@ class StreamHandler:
                 f"attribute but got neither. Message: {message}"
             )
 
-    def _handle_tools_chunk(self, chunk):
-        tools_data = chunk["tools"]
-        messages = tools_data.get("messages", [])
-        errors = tools_data.get("errors", [])
-
+    def _format_tool_errors(self, errors):
         output = ""
-
-        # handle errors
-        if errors:
-            for error in errors:
-                if isinstance(error, dict):
-                    error_msg = error.get("error", str(error))
-                    tool_name = error.get("tool", "unknown")
-                    tool_id = error.get("tool_call_id", "unknown")
-                    output += (
-                        f"⚠️ **{tool_name}** (ID: `{tool_id}`) encountered an "
-                        f"issue: `{error_msg}`\n\n"
-                    )
-
-                    # remove from pending
-                    self.pending_tool_calls.discard(tool_id)
-                else:
-                    output += f"❌ **Tool execution failed:** {error}\n\n"
-
-        # handle successful tool results
-        if messages:
-            for tool_message in messages:
-                tool_id = (
-                    tool_message.tool_call_id
-                    if hasattr(tool_message, "tool_call_id")
-                    else "unknown"
+        for error in errors:
+            if isinstance(error, dict):
+                error_msg = error.get("error", str(error))
+                tool_name = error.get("tool", "unknown")
+                tool_id = error.get("tool_call_id", "unknown")
+                output += (
+                    f"⚠️ **{tool_name}** (ID: `{tool_id}`) encountered an "
+                    f"issue: `{error_msg}`\n\n"
                 )
-                tool_name = (
-                    tool_message.name if hasattr(tool_message, "name") else "unknown"
-                )
-                result = (
-                    tool_message.content if hasattr(tool_message, "content") else ""
-                )
-
-                tool_result = f"✅ **Tool result:** `{tool_name}` (ID: `{tool_id}`) "
-
-                if self.show_tool_results:
-                    tool_result += f"→ `{result}`\n\n"
-                else:
-                    tool_result += "success!\n\n"
-
-                output += tool_result
 
                 # remove from pending
                 self.pending_tool_calls.discard(tool_id)
+            else:
+                output += f"❌ **Tool execution failed:** {error}\n\n"
+        return output
 
-            # after all tool executions complete, show next thinking message
-            if not self.pending_tool_calls:  # All tools have returned
-                next_iteration = self.last_iteration + 1
-                output += "\n" + self.get_thinking_message(next_iteration)
+    def _format_tool_messages(self, messages):
+        # handle successful tool results
+        output = ""
+        for tool_message in messages:
+            tool_id = (
+                tool_message.tool_call_id
+                if hasattr(tool_message, "tool_call_id")
+                else "unknown"
+            )
+            tool_name = (
+                tool_message.name if hasattr(tool_message, "name") else "unknown"
+            )
+            result = (
+                tool_message.content if hasattr(tool_message, "content") else ""
+            )
+
+            tool_result = f"✅ **Tool result:** `{tool_name}` (ID: `{tool_id}`) "
+
+            if self.show_tool_results:
+                tool_result += f"→ `{result}`\n\n"
+            else:
+                tool_result += "success!\n\n"
+
+            output += tool_result
+
+            # remove from pending
+            self.pending_tool_calls.discard(tool_id)
+
+        # after all tool executions complete, show next thinking message
+        if not self.pending_tool_calls:  # All tools have returned
+            next_iteration = self.last_iteration + 1
+            output += "\n" + self.get_thinking_message(next_iteration)
 
         return output
+
+    def _handle_tools_chunk(self, chunk):
+        messages = chunk["tools"].get("messages", [])
+        errors = chunk["tools"].get("errors", [])
+
+        if errors:
+            return self._format_tool_errors(errors)
+
+        if messages:
+            return self._format_tool_messages(messages)
+
+        raise RuntimeError(
+            "Expected tools chunk to have errors or messages, but got neither. "
+            f"Chunk: {chunk}"
+        ) 
 
     def process_chunk(self, chunk):
         """
         Process a single chunk and return formatted output.
         Returns the text to append to the display.
         """
-        output = ""
-
         if "agent" in chunk:
             return self._handle_agent_chunk(chunk)
 
