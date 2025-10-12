@@ -18,7 +18,7 @@ atexit.register(driver.close_neo4j_driver)
 
 def main():
 
-    with open("src/rag/system_messages/react_graph_rag.txt", "r") as f:
+    with open("config/prompts/system.txt", "r") as f:
         system_message = f.read()
 
     llm = ChatOpenAI(model="gpt-4.1")
