@@ -4,6 +4,37 @@ class StreamHandler:
         self.show_tool_results = show_tool_results
         self.pending_tool_calls = set()  # track pending tool calls
 
+    def _format_agent_tool_calls(self, message):
+        # only one tool call
+        if len(message.tool_calls) == 1:
+            tool_call = message.tool_calls[0]
+            tool_id = tool_call.get("id", "unknown")
+            tool_name = tool_call.get("name", "unknown")
+            tool_args = tool_call.get("args", {})
+
+            self.pending_tool_calls.add(tool_id)
+
+            return (
+                f"🔧 **Calling tool:** `{tool_name}` (ID: `{tool_id}`) "
+                f"**Args**: `{tool_args}`\n\n"
+            )
+
+        # several simultaneous calls
+        else:
+            output = f"🔧 **Calling {len(message.tool_calls)} tools:**\n\n"
+
+            for tool_call in message.tool_calls:
+                tool_id = tool_call.get('id', 'unknown')
+                tool_name = tool_call.get('name', 'unknown')
+                tool_args = tool_call.get('args', {})
+
+                self.pending_tool_calls.add(tool_id)
+
+                output += (
+                    f"  • `{tool_name}` (ID: `{tool_id}`) **Args**: `{tool_args}`\n\n"
+                )
+            return output
+
     def _handle_agent_chunk(self, chunk):
         agent_data = chunk["agent"]
         iteration = agent_data.get("iteration_count", 0)
@@ -11,34 +42,17 @@ class StreamHandler:
 
         if not messages:
             return ""
-        
-        # update tracking of the current iteration
-        self.last_iteration = iteration
+
+        self.last_iteration = iteration  # update tracking of the current iteration
 
         message = messages[0]
-        output = ""
-        # check if this is a tool call (or multiple tool calls)
+
         if hasattr(message, "tool_calls") and message.tool_calls:
-            output += f"🔧 **Calling {len(message.tool_calls)} tool(s):**\n\n"
+            return self._format_agent_tool_calls(message)
 
-            for tool_call in message.tool_calls:
-                tool_id = tool_call.get('id', 'unknown')
-                tool_name = tool_call.get('name', 'unknown')
-                tool_args = tool_call.get('args', {})
-
-                # track this tool call as pending
-                self.pending_tool_calls.add(tool_id)
-
-                output += f"  • `{tool_name}` (ID: `{tool_id}`)\n"
-                output += f"    **Args**: `{tool_args}`\n\n"
-
-            return output
-
-        # check if this is a final answer
         elif hasattr(message, "content") and message.content:
-            output += f"💡 **Final Answer:**\n\n{message.content}\n"
-            return output
-        
+            return f"💡 **Final Answer:**\n\n{message.content}\n"
+
         else:
             raise RuntimeError(
                 "Expected agent message to contain either tool_calls or content "

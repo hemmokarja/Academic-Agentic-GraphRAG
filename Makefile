@@ -39,7 +39,7 @@ pull:
 
 import-neo4j:
 	@echo "Stopping Neo4j container if running..."
-	@docker stop $(CONTAINER_NAME) 2>/dev/null || true
+	@$(MAKE) stop
 	@echo "Running neo4j-admin import..."
 	@docker run --rm \
 		-v $(DATA_DIR):/data \
