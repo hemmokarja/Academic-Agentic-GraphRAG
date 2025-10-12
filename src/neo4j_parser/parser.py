@@ -1,11 +1,16 @@
 import logging
+import ssl
+import urllib
 
+import certifi
 from rdflib import OWL, RDF, RDFS, Graph, Literal, URIRef
 from SPARQLWrapper import JSON, POST, SPARQLWrapper
 
 logger = logging.getLogger(__name__)
 
 AUTHOR_URI = "http://purl.org/dc/terms/creator"
+
+_ssl_warning_logged = False
 
 
 def _to_pascal_case(s):
@@ -56,7 +61,29 @@ def _query_names(sparql, author_uris):
 
     sparql.setQuery(query)
     sparql.setReturnFormat(JSON)
-    results = sparql.query().convert()
+
+    try:
+        results = sparql.query().convert()  # normal secure query first
+    except Exception as e:
+        global _ssl_warning_logged
+
+        if "CERTIFICATE_VERIFY_FAILED" in str(e):
+            if not _ssl_warning_logged:
+                logger.warning(
+                    "SSL verification failed for SemOpenAlex — retrying with "
+                    "unverified SSL context. This is likely due to an expired "
+                    "certificate on their server."
+                )
+                _ssl_warning_logged = True
+
+            unverified = ssl._create_unverified_context()
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPSHandler(context=unverified)
+            )
+            urllib.request.install_opener(opener)
+            results = sparql.query().convert()
+        else:
+            raise
 
     result_dict = {}
     for result in results["results"]["bindings"]:
@@ -69,6 +96,11 @@ def _query_names(sparql, author_uris):
 
 def _fetch_author_names(author_nodes, batch_size):
     author_uris = [n["properties"]["uri"] for n in author_nodes]
+
+    # patch SSL context that trusts current root CAs
+    context = ssl.create_default_context(cafile=certifi.where())
+    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context))
+    urllib.request.install_opener(opener)
 
     sparql = SPARQLWrapper("https://semopenalex.org/sparql")
     sparql.setMethod(POST)
