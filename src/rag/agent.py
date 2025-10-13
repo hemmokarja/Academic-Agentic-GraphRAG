@@ -305,6 +305,7 @@ class ReActAgent:
             error_record = {
                 "node": "tools",
                 "tool": tool_name,
+                "tool_call_id": tool_id,
                 "error": str(te),
                 "error_type": "TimeoutError",
                 "attempts": self.config.max_tool_retries + 1,
@@ -334,6 +335,7 @@ class ReActAgent:
             error_record = {
                 "node": "tools",
                 "tool": tool_name,
+                "tool_call_id": tool_id,
                 "error": str(e),
                 "error_type": type(e).__name__,
                 "attempts": self.config.max_tool_retries + 1,

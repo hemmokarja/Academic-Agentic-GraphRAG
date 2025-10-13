@@ -66,8 +66,8 @@ class StreamHandler:
                 tool_name = error.get("tool", "unknown")
                 tool_id = error.get("tool_call_id", "unknown")
                 output += (
-                    f"⚠️ **{tool_name}** (ID: `{tool_id}`) encountered an "
-                    f"issue: `{error_msg}`\n\n"
+                    f"⚠️ **Issue with tool:** `{tool_name}` (ID: `{tool_id}`) :"
+                    f"`{error_msg}`\n\n"
                 )
 
                 # remove from pending
