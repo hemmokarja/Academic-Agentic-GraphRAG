@@ -93,10 +93,11 @@ def search_nodes(
     - Relevance-ranked results
 
     The tool returns exact property values (e.g., exact paper titles with proper
-    capitalization) that can be used with other tools.
+    capitalization) AND the nodeId (unique identifier) that can be used with other
+    graph traversal tools.
 
     Returns:
-        List of matching nodes with their properties and relevance scores.
+        List of matching nodes with their properties, nodeId, and relevance scores.
         Empty list if no matches found or if an error occurs.
     """
     driver = driver_module.get_neo4j_driver()
@@ -141,7 +142,10 @@ def _search_nodes_tx(
         "limit": limit
     }
 
-    return_items = [f"node.{prop} AS {prop}" for prop in return_properties]
+    return_items = (
+        ["node.nodeId AS nodeId"]
+        + [f"node.{prop} AS {prop}" for prop in return_properties]
+    )
     return_clause = ", ".join(return_items) + ", score"
 
     query = f"""
@@ -156,7 +160,8 @@ def _search_nodes_tx(
 
     records = []
     for record in result:
-        node_data = {prop: record[prop] for prop in return_properties}
+        node_data = {"nodeId": record["nodeId"]}
+        node_data.update({prop: record[prop] for prop in return_properties})
         node_data["node_type"] = node_type
         node_data["relevance_score"] = record["score"]
         records.append(node_data)

@@ -8,10 +8,10 @@ from rag import driver as driver_module
 
 class AuthorPapersInput(BaseModel):
     """Input schema for finding papers by an author."""
-    author_name: str = Field(
+    author_node_id: str = Field(
         description=(
-            "Exact author name as returned by search_nodes. "
-            "Must match the 'name' property exactly (case-sensitive)."
+            "Unique node identifier (nodeId) for the author, as returned by search_nodes. "
+            "This is the stable URI identifier for the author node."
         )
     )
     limit: int = Field(
@@ -35,7 +35,7 @@ class AuthorPapersInput(BaseModel):
 
 @tool(args_schema=AuthorPapersInput)
 def author_papers(
-    author_name: str,
+    author_node_id: str,
     limit: int,
     return_properties: List[str],
     order_by: Optional[str]
@@ -51,7 +51,7 @@ def author_papers(
     - Get papers as input for further traversals (e.g., to find citations)
 
     Returns:
-        List of papers with requested properties, ordered by date or citation count.
+        List of papers with nodeId, requested properties, ordered by date or citation count.
         Empty list if author not found or has no papers.
     """
     driver = driver_module.get_neo4j_driver()
@@ -59,7 +59,7 @@ def author_papers(
         with driver.session() as session:
             result = session.execute_read(
                 _author_papers_tx,
-                author_name,
+                author_node_id,
                 limit,
                 return_properties,
                 order_by
@@ -71,12 +71,15 @@ def author_papers(
 
 def _author_papers_tx(
     tx,
-    author_name: str,
+    author_node_id: str,
     limit: int,
     return_properties: List[str],
     order_by: Optional[str]
 ):
-    return_items = [f"paper.{prop} AS {prop}" for prop in return_properties]
+    return_items = (
+        ["paper.nodeId AS nodeId"]
+        + [f"paper.{prop} AS {prop}" for prop in return_properties]
+    )
     return_clause = ", ".join(return_items)
 
     order_clause = (
@@ -84,17 +87,18 @@ def _author_papers_tx(
     )
 
     query = f"""
-    MATCH (author:Author {{name: $author_name}})<-[:HAS_AUTHOR]-(paper:Paper)
+    MATCH (author:Author {{nodeId: $author_node_id}})<-[:HAS_AUTHOR]-(paper:Paper)
     RETURN {return_clause}
     ORDER BY {order_clause}
     LIMIT $limit
     """
 
-    result = tx.run(query, author_name=author_name, limit=limit)
+    result = tx.run(query, author_node_id=author_node_id, limit=limit)
 
     records = []
     for record in result:
-        paper_data = {prop: record[prop] for prop in return_properties}
+        paper_data = {"nodeId": record["nodeId"]}
+        paper_data.update({prop: record[prop] for prop in return_properties})
         records.append(paper_data)
 
     return records
@@ -102,10 +106,10 @@ def _author_papers_tx(
 
 class PaperAuthorsInput(BaseModel):
     """Input schema for finding authors of a paper."""
-    paper_title: str = Field(
+    paper_node_id: str = Field(
         description=(
-            "Exact paper title as returned by search_nodes. "
-            "Must match the 'title' property exactly (case-sensitive)."
+            "Unique node identifier (nodeId) for the paper, as returned by search_nodes. "
+            "This is the stable URI identifier for the paper node."
         )
     )
     return_properties: List[str] = Field(
@@ -118,21 +122,21 @@ class PaperAuthorsInput(BaseModel):
 
 @tool(args_schema=PaperAuthorsInput)
 def paper_authors(
-    paper_title: str,
+    paper_node_id: str,
     return_properties: List[str]
 ) -> List[Dict[str, Any]]:
     """
     Find all authors of a specific paper.
-    
+
     Traversal pattern: Paper -> HAS_AUTHOR -> Author
-    
+
     Use this when you need to:
     - Identify who wrote a paper
     - Find authors to explore their other work
     - Get authors as input for finding collaborators
-    
+
     Returns:
-        List of authors with requested properties, in order of authorship.
+        List of authors with nodeId and requested properties, in order of authorship.
         Empty list if paper not found or has no authors.
     """
     driver = driver_module.get_neo4j_driver()
@@ -140,7 +144,7 @@ def paper_authors(
         with driver.session() as session:
             result = session.execute_read(
                 _paper_authors_tx,
-                paper_title,
+                paper_node_id,
                 return_properties
             )
             return result
@@ -148,21 +152,25 @@ def paper_authors(
         return [{"error": str(e), "message": "Failed to retrieve paper authors"}]
 
 
-def _paper_authors_tx(tx, paper_title: str, return_properties: List[str]):
+def _paper_authors_tx(tx, paper_node_id: str, return_properties: List[str]):
     """Transaction function for paper_authors traversal."""
-    return_items = [f"author.{prop} AS {prop}" for prop in return_properties]
+    return_items = (
+        ["author.nodeId AS nodeId"]
+        + [f"author.{prop} AS {prop}" for prop in return_properties]
+    )
     return_clause = ", ".join(return_items)
 
     query = f"""
-    MATCH (paper:Paper {{title: $paper_title}})-[:HAS_AUTHOR]->(author:Author)
+    MATCH (paper:Paper {{nodeId: $paper_node_id}})-[:HAS_AUTHOR]->(author:Author)
     RETURN {return_clause}
     """
 
-    result = tx.run(query, paper_title=paper_title)
+    result = tx.run(query, paper_node_id=paper_node_id)
 
     records = []
     for record in result:
-        author_data = {prop: record[prop] for prop in return_properties}
+        author_data = {"nodeId": record["nodeId"]}
+        author_data.update({prop: record[prop] for prop in return_properties})
         records.append(author_data)
 
     return records
@@ -170,10 +178,10 @@ def _paper_authors_tx(tx, paper_title: str, return_properties: List[str]):
 
 class PaperCitationsOutInput(BaseModel):
     """Input schema for finding papers that a given paper cites (references)."""
-    paper_title: str = Field(
+    paper_node_id: str = Field(
         description=(
-            "Exact paper title as returned by search_nodes. "
-            "Must match the 'title' property exactly (case-sensitive)."
+            "Unique node identifier (nodeId) for the paper, as returned by search_nodes. "
+            "This is the stable URI identifier for the paper node."
         )
     )
     limit: int = Field(
@@ -197,7 +205,7 @@ class PaperCitationsOutInput(BaseModel):
 
 @tool(args_schema=PaperCitationsOutInput)
 def paper_citations_out(
-    paper_title: str,
+    paper_node_id: str,
     limit: int,
     return_properties: List[str],
     order_by: Optional[str]
@@ -214,7 +222,7 @@ def paper_citations_out(
     - Trace back the lineage of ideas
 
     Returns:
-        List of cited papers with requested properties.
+        List of cited papers with nodeId and requested properties.
         Empty list if paper not found or cites no papers.
     """
     driver = driver_module.get_neo4j_driver()
@@ -222,7 +230,7 @@ def paper_citations_out(
         with driver.session() as session:
             result = session.execute_read(
                 _paper_citations_out_tx,
-                paper_title,
+                paper_node_id,
                 limit,
                 return_properties,
                 order_by
@@ -234,13 +242,16 @@ def paper_citations_out(
 
 def _paper_citations_out_tx(
     tx,
-    paper_title: str,
+    paper_node_id: str,
     limit: int,
     return_properties: List[str],
     order_by: Optional[str]
 ):
     """Transaction function for outbound citations."""
-    return_items = [f"cited.{prop} AS {prop}" for prop in return_properties]
+    return_items = (
+        ["cited.nodeId AS nodeId"]
+        + [f"cited.{prop} AS {prop}" for prop in return_properties]
+    )
     return_clause = ", ".join(return_items)
 
     order_clause = (
@@ -248,17 +259,18 @@ def _paper_citations_out_tx(
     )
 
     query = f"""
-    MATCH (paper:Paper {{title: $paper_title}})-[:CITES]->(cited:Paper)
+    MATCH (paper:Paper {{nodeId: $paper_node_id}})-[:CITES]->(cited:Paper)
     RETURN {return_clause}
     ORDER BY {order_clause}
     LIMIT $limit
     """
 
-    result = tx.run(query, paper_title=paper_title, limit=limit)
+    result = tx.run(query, paper_node_id=paper_node_id, limit=limit)
 
     records = []
     for record in result:
-        paper_data = {prop: record[prop] for prop in return_properties}
+        paper_data = {"nodeId": record["nodeId"]}
+        paper_data.update({prop: record[prop] for prop in return_properties})
         records.append(paper_data)
 
     return records
@@ -266,10 +278,10 @@ def _paper_citations_out_tx(
 
 class PaperCitationsInInput(BaseModel):
     """Input schema for finding papers that cite a given paper."""
-    paper_title: str = Field(
+    paper_node_id: str = Field(
         description=(
-            "Exact paper title as returned by search_nodes. "
-            "Must match the 'title' property exactly (case-sensitive)."
+            "Unique node identifier (nodeId) for the paper, as returned by search_nodes. "
+            "This is the stable URI identifier for the paper node."
         )
     )
     limit: int = Field(
@@ -293,7 +305,7 @@ class PaperCitationsInInput(BaseModel):
 
 @tool(args_schema=PaperCitationsInInput)
 def paper_citations_in(
-    paper_title: str,
+    paper_node_id: str,
     limit: int,
     return_properties: List[str],
     order_by: Optional[str]
@@ -310,7 +322,7 @@ def paper_citations_in(
     - Discover related or derivative research
 
     Returns:
-        List of citing papers with requested properties.
+        List of citing papers with nodeId and requested properties.
         Empty list if paper not found or has no citations.
     """
     driver = driver_module.get_neo4j_driver()
@@ -318,7 +330,7 @@ def paper_citations_in(
         with driver.session() as session:
             result = session.execute_read(
                 _paper_citations_in_tx,
-                paper_title,
+                paper_node_id,
                 limit,
                 return_properties,
                 order_by
@@ -330,13 +342,16 @@ def paper_citations_in(
 
 def _paper_citations_in_tx(
     tx,
-    paper_title: str,
+    paper_node_id: str,
     limit: int,
     return_properties: List[str],
     order_by: Optional[str]
 ):
     """Transaction function for inbound citations."""
-    return_items = [f"citing.{prop} AS {prop}" for prop in return_properties]
+    return_items = (
+        ["citing.nodeId AS nodeId"]
+        + [f"citing.{prop} AS {prop}" for prop in return_properties]
+    )
     return_clause = ", ".join(return_items)
 
     order_clause = (
@@ -344,17 +359,18 @@ def _paper_citations_in_tx(
     )
 
     query = f"""
-    MATCH (paper:Paper {{title: $paper_title}})<-[:CITES]-(citing:Paper)
+    MATCH (paper:Paper {{nodeId: $paper_node_id}})<-[:CITES]-(citing:Paper)
     RETURN {return_clause}
     ORDER BY {order_clause}
     LIMIT $limit
     """
 
-    result = tx.run(query, paper_title=paper_title, limit=limit)
+    result = tx.run(query, paper_node_id=paper_node_id, limit=limit)
 
     records = []
     for record in result:
-        paper_data = {prop: record[prop] for prop in return_properties}
+        paper_data = {"nodeId": record["nodeId"]}
+        paper_data.update({prop: record[prop] for prop in return_properties})
         records.append(paper_data)
 
     return records
@@ -362,10 +378,10 @@ def _paper_citations_in_tx(
 
 class AuthorCoauthorsInput(BaseModel):
     """Input schema for finding an author's collaborators."""
-    author_name: str = Field(
+    author_node_id: str = Field(
         description=(
-            "Exact author name as returned by search_nodes. "
-            "Must match the 'name' property exactly (case-sensitive)."
+            "Unique node identifier (nodeId) for the author, as returned by search_nodes. "
+            "This is the stable URI identifier for the author node."
         )
     )
     limit: int = Field(
@@ -383,7 +399,7 @@ class AuthorCoauthorsInput(BaseModel):
 
 @tool(args_schema=AuthorCoauthorsInput)
 def author_coauthors(
-    author_name: str,
+    author_node_id: str,
     limit: int,
     min_collaborations: int
 ) -> List[Dict[str, Any]]:
@@ -394,6 +410,7 @@ def author_coauthors(
     (excluding the starting author)
 
     Returns coauthors with collaboration statistics:
+    - nodeId: Unique identifier for the coauthor
     - name: Coauthor's name
     - collaboration_count: Number of papers co-authored together
     - first_collaboration: Date of earliest collaboration
@@ -413,7 +430,7 @@ def author_coauthors(
         with driver.session() as session:
             result = session.execute_read(
                 _author_coauthors_tx,
-                author_name,
+                author_node_id,
                 limit,
                 min_collaborations
             )
@@ -424,13 +441,13 @@ def author_coauthors(
 
 def _author_coauthors_tx(
     tx,
-    author_name: str,
+    author_node_id: str,
     limit: int,
     min_collaborations: int
 ):
     """Transaction function for finding coauthors."""
     query = """
-    MATCH (author:Author {name: $author_name})<-[:HAS_AUTHOR]-(paper:Paper)-[:HAS_AUTHOR]->(coauthor:Author)
+    MATCH (author:Author {nodeId: $author_node_id})<-[:HAS_AUTHOR]-(paper:Paper)-[:HAS_AUTHOR]->(coauthor:Author)
     WHERE author <> coauthor
     WITH
         coauthor, 
@@ -439,6 +456,7 @@ def _author_coauthors_tx(
         MAX(paper.date) AS last_collaboration
     WHERE collaboration_count >= $min_collaborations
     RETURN
+        coauthor.nodeId AS nodeId,
         coauthor.name AS name,
         collaboration_count,
         first_collaboration,
@@ -449,7 +467,7 @@ def _author_coauthors_tx(
 
     result = tx.run(
         query,
-        author_name=author_name,
+        author_node_id=author_node_id,
         limit=limit,
         min_collaborations=min_collaborations
     )
@@ -457,6 +475,7 @@ def _author_coauthors_tx(
     records = []
     for record in result:
         coauthor_data = {
+            "nodeId": record["nodeId"],
             "name": record["name"],
             "collaboration_count": record["collaboration_count"],
             "first_collaboration": record["first_collaboration"],
@@ -469,10 +488,10 @@ def _author_coauthors_tx(
 
 class PaperCitationChainInput(BaseModel):
     """Input schema for multi-hop citation traversal."""
-    paper_title: str = Field(
+    paper_node_id: str = Field(
         description=(
-            "Exact paper title as returned by search_nodes. "
-            "Must match the 'title' property exactly (case-sensitive)."
+            "Unique node identifier (nodeId) for the paper, as returned by search_nodes. "
+            "This is the stable URI identifier for the paper node."
         )
     )
     direction: Literal["forward", "backward", "both"] = Field(
@@ -509,7 +528,7 @@ class PaperCitationChainInput(BaseModel):
 
 @tool(args_schema=PaperCitationChainInput)
 def paper_citation_chain(
-    paper_title: str,
+    paper_node_id: str,
     direction: str,
     max_depth: int,
     limit: int,
@@ -524,6 +543,7 @@ def paper_citation_chain(
     - Both: Bidirectional citation network exploration
 
     Returns papers with:
+    - nodeId: Unique identifier for each paper
     - All requested properties
     - depth: How many hops from the starting paper (1, 2, 3, ...)
     - path_length: Same as depth (for clarity)
@@ -543,7 +563,7 @@ def paper_citation_chain(
         with driver.session() as session:
             result = session.execute_read(
                 _paper_citation_chain_tx,
-                paper_title,
+                paper_node_id,
                 direction,
                 max_depth,
                 limit,
@@ -556,7 +576,7 @@ def paper_citation_chain(
 
 def _paper_citation_chain_tx(
     tx,
-    paper_title: str,
+    paper_node_id: str,
     direction: str,
     max_depth: int,
     limit: int,
@@ -570,12 +590,15 @@ def _paper_citation_chain_tx(
         rel_pattern = "-[:CITES*1..{}]->".format(max_depth)
     else:  # both
         rel_pattern = "-[:CITES*1..{}]-".format(max_depth)
-    
-    return_items = [f"related.{prop} AS {prop}" for prop in return_properties]
+
+    return_items = (
+        ["related.nodeId AS nodeId"]
+        + [f"related.{prop} AS {prop}" for prop in return_properties]
+    )
     return_clause = ", ".join(return_items)
-    
+
     query = f"""
-    MATCH path = (paper:Paper {{title: $paper_title}}){rel_pattern}(related:Paper)
+    MATCH path = (paper:Paper {{nodeId: $paper_node_id}}){rel_pattern}(related:Paper)
     WHERE paper <> related
     WITH DISTINCT related, MIN(LENGTH(path)) AS depth
     RETURN {return_clause}, depth
@@ -583,11 +606,12 @@ def _paper_citation_chain_tx(
     LIMIT $limit
     """
 
-    result = tx.run(query, paper_title=paper_title, limit=limit)
+    result = tx.run(query, paper_node_id=paper_node_id, limit=limit)
 
     records = []
     for record in result:
-        paper_data = {prop: record[prop] for prop in return_properties}
+        paper_data = {"nodeId": record["nodeId"]}
+        paper_data.update({prop: record[prop] for prop in return_properties})
         paper_data["depth"] = record["depth"]
         paper_data["path_length"] = record["depth"]  # Alias for clarity
         records.append(paper_data)
