@@ -52,7 +52,7 @@ import-neo4j:
 		$(NEO4J_DB)
 	@echo "Import complete!"
 
-run-neo4j:
+run-neo4j: stop
 	@docker run -d \
 		--name $(CONTAINER_NAME) \
 		-p $(HTTP_PORT):7474 -p $(BOLT_PORT):7687 \
@@ -70,11 +70,21 @@ create-indexes:
 	@./scripts/create-indexes.sh
 
 stop:
-	@docker rm -f $(CONTAINER_NAME) 2>/dev/null || true
-	@echo "Neo4J container stopped and removed"
+	@if docker ps -a --format '{{.Names}}' | grep -q "^$(CONTAINER_NAME)$$"; then \
+		echo "Stopping and removing Neo4j container '$(CONTAINER_NAME)'..."; \
+		docker rm -f $(CONTAINER_NAME) >/dev/null; \
+		echo "Neo4j container stopped and removed."; \
+	fi
 
 chat:
+	@if [ -z "$$OPENAI_API_KEY" ]; then \
+		echo "Error: OPENAI_API_KEY is not set. Please export it first: export OPENAI_API_KEY=your_api_key"; \
+		exit 1; \
+	fi
 	@NEO4J_URI=bolt://localhost:$(BOLT_PORT) uv run streamlit run src/ui/main.py
 
 clean: stop
 	@rm -rf $(NEO4J_DIR)
+
+logs:
+	@docker logs -f $(CONTAINER_NAME)
