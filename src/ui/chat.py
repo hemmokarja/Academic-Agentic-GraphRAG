@@ -54,7 +54,7 @@ def chat(
             handler = StreamHandler(show_tool_results)
             config = {"configurable": {"thread_id": st.session_state.thread_id}}
             
-            # Start with initial thinking message
+            # start with initial thinking message
             full_response = handler.get_thinking_message(iteration=1)
             message_placeholder.markdown(full_response)
 
