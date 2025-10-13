@@ -71,7 +71,6 @@ create-indexes:
 
 stop:
 	@if docker ps -a --format '{{.Names}}' | grep -q "^$(CONTAINER_NAME)$$"; then \
-		echo "Stopping and removing Neo4j container '$(CONTAINER_NAME)'..."; \
 		docker rm -f $(CONTAINER_NAME) >/dev/null; \
 		echo "Neo4j container stopped and removed."; \
 	fi
@@ -85,6 +84,7 @@ chat:
 
 clean: stop
 	@rm -rf $(NEO4J_DIR)
+	@echo "Cleaned up Neo4j directories at $(NEO4J_DIR)."
 
 logs:
 	@docker logs -f $(CONTAINER_NAME)
