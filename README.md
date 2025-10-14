@@ -21,7 +21,7 @@ This is a learning project demonstrating AI engineering skills through the imple
 
 The agent autonomously breaks these down into graph traversal strategies.
 
-## 🤔 What is GraphRAG?
+## 🕸️ What is GraphRAG?
 
 GraphRAG (Graph Retrieval-Augmented Generation) extends traditional RAG by representing knowledge as a graph rather than isolated documents. While conventional RAG retrieves relevant text chunks based on similarity search, GraphRAG leverages explicit relationships between entities to:
 
@@ -32,7 +32,7 @@ GraphRAG (Graph Retrieval-Augmented Generation) extends traditional RAG by repre
 
 GraphRAG shines when:
 - Queries require understanding relationships between entities
-- Multi-step reasoning is necessary (e.g., finding common citations between research areas)
+- Information is connected through multi-hop paths in the graph
 - The knowledge domain has inherent graph structure (research networks, citation graphs, knowledge bases)
 - Context from connected nodes enhances answer quality
 
@@ -40,7 +40,7 @@ GraphRAG shines when:
 
 While vanilla GraphRAG systems allow LLMs to select and execute graph queries, they typically operate in a **single-shot** manner: plan once, execute once, answer. This system goes further with **autonomous multi-step reasoning**:
 
-- **Decomposes complex questions** into sequential graph operations
+- **Decomposes complex questions** that require chaining multiple graph operations
 - **Iterative exploration**: Observes results and decides if more information is needed
 - **Adapts strategy** based on intermediate findings (e.g., "These authors aren't relevant, let me try a different path")
 - **Self-reflects** on answer completeness before responding
