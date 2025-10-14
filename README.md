@@ -190,7 +190,6 @@ Use this procedure to establish a **Remote Connection** in Neo4j Desktop to manu
 This project demonstrates:
 - Implementing ReAct-style agentic loops with tool selection and reasoning
 - Implementing GraphRAG architectures
-- Designing tool-augmented LLM systems
 - Working with Neo4j, Docker, and modern Python tooling
 - Building production-quality data pipelines with validation and error handling
 - Integrating graph databases into AI applications
