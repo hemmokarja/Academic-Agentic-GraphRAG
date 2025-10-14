@@ -1,12 +1,25 @@
 # Agentic GraphRAG Engine for Academic ML/AI Research
 
-An autonomous research assistant that reasons over a knowledge graph of 1.6M entities using multi-step planning and graph traversal. This agentic GraphRAG system explores machine learning research using graph-based reasoning over scientific publications, built on Linked Papers With Code and enriched with SemOpenAlex metadata.
+An autonomous research assistant that reasons over 1.6M scientific entities through multi-step planning and graph traversal. Built on Linked Papers With Code and enriched with SemOpenAlex metadata, this system uses agentic workflows to explore ML research through the relationships between papers, authors, citations, datasets, and methods.
 
-⚠️ **Note: Currently work in progress**
+⚠️ **Note: Project currently work in progress**
 
 ## 🎯 Overview
 
 This is a learning project demonstrating AI engineering skills through the implementation of an intelligent agent capable of multi-step reasoning over a large-scale knowledge graph of ML/AI research. Unlike traditional RAG systems that operate on flat document collections, this system leverages the inherent graph structure of academic publications - papers, authors, citations, datasets, and methods - to answer complex queries that require graph traversal and relational reasoning.
+
+## 💡 What Can You Ask?
+
+**Simple (single-tool queries)**:
+- "Who are the authors of the BERT paper?"
+- "What papers cite Attention Is All You Need?"
+
+**Complex (multi-step agentic reasoning)**:
+- "What other papers have the authors of BERT published?"
+- "Trace the lineage from ResNet to modern vision transformers?"
+- "Who are the most prolific collaborators in self-supervised learning?"
+
+The agent autonomously breaks these down into graph traversal strategies.
 
 ## 🤔 What is GraphRAG?
 
@@ -46,19 +59,6 @@ While vanilla GraphRAG systems allow LLMs to select and execute graph queries, t
 6. Synthesizes a narrative of the evolution
 
 This is the difference between *query execution* and *iterative research*.
-
-## 💡 What Can You Ask?
-
-**Simple (single-tool queries)**:
-- "Who are the authors of the BERT paper?"
-- "What papers cite Attention Is All You Need?"
-
-**Complex (multi-step agentic reasoning)**:
-- "What other papers have the authors of BERT published?"
-- "Trace the lineage from ResNet to modern vision transformers?"
-- "Who are the most prolific collaborators in self-supervised learning?"
-
-The agent autonomously breaks these down into graph traversal strategies.
 
 ## 🏗️ Architecture
 
@@ -114,17 +114,15 @@ The agent has access to specialized tools for exploring the knowledge graph:
 
 **System Requirements**: Parsing LPWC RDF files is resource-intensive. A machine with **>25GB RAM** is recommended.
 
-## 📦 Installation
+## 🚀 Quick Start
+
+### Installation
 
 This project uses `uv` for dependency management. Install dependencies with:
 
 ```bash
 uv sync
 ```
-
-## 🚀 Quick Start
-
-The project includes a Makefile for easy setup and operation:
 
 ### Initial Setup
 
@@ -199,3 +197,7 @@ This project demonstrates:
 - Building production-quality data pipelines with validation and error handling
 - Integrating graph databases into AI applications
 - Parsing and transforming large-scale RDF datasets
+
+# 📝 License
+
+This project is licensed under the MIT License.
