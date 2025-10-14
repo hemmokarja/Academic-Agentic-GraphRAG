@@ -1,4 +1,4 @@
-# Agentic GraphRAG Engine for Academic ML/AI Research
+# Agentic GraphRAG Engine for ML/AI Research
 
 An autonomous research assistant that reasons over 1.6M scientific entities through multi-step planning and graph traversal. Built on Linked Papers With Code and enriched with SemOpenAlex metadata, this system uses agentic workflows to explore ML research through the relationships between papers, authors, citations, datasets, and methods.
 
