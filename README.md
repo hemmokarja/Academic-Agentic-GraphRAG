@@ -75,11 +75,11 @@ While vanilla GraphRAG systems allow LLMs to select and execute graph queries, t
 
 **Linked Papers With Code (LPWC)**
 
-LPWC is an RDF knowledge graph that comprehensively models the machine learning research field, containing information about almost 500,000 ML publications including tasks addressed, datasets utilized, methods implemented, and evaluations performed. This rich structured representation provides the foundation for graph-based reasoning over ML research.
+[LPWC](https://github.com/metaphacts/linkedpaperswithcode) is an RDF knowledge graph that comprehensively models the machine learning research field, containing information about almost 500,000 ML publications including tasks addressed, datasets utilized, methods implemented, and evaluations performed. This rich structured representation provides the foundation for graph-based reasoning over ML research.
 
 **SemOpenAlex**
 
-SemOpenAlex is an extensive RDF knowledge graph containing over 26 billion triples about scientific publications and their associated entities, including authors, institutions, journals, and concepts, licensed under CC0 for free and open access. This project uses SemOpenAlex's SPARQL endpoint to enrich papers with additional metadata and citation relationships.
+[SemOpenAlex](https://semopenalex.org/resource/semopenalex:UniversalSearch) is an extensive RDF knowledge graph containing over 26 billion triples about scientific publications and their associated entities, including authors, institutions, journals, and concepts, licensed under CC0 for free and open access. This project uses SemOpenAlex's SPARQL endpoint to enrich papers with additional metadata and citation relationships.
 
 ### Graph Statistics
 
