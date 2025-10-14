@@ -40,8 +40,8 @@ GraphRAG shines when:
 
 While vanilla GraphRAG systems allow LLMs to select and execute graph queries, they typically operate in a **single-shot** manner: plan once, execute once, answer. This system goes further with **autonomous multi-step reasoning**:
 
-- **Iterative exploration**: Observes results and decides if more information is needed
 - **Decomposes complex questions** into sequential graph operations
+- **Iterative exploration**: Observes results and decides if more information is needed
 - **Adapts strategy** based on intermediate findings (e.g., "These authors aren't relevant, let me try a different path")
 - **Self-reflects** on answer completeness before responding
 - **Executes parallel tool calls** for efficiency when appropriate
@@ -57,8 +57,6 @@ While vanilla GraphRAG systems allow LLMs to select and execute graph queries, t
 4. Follows the citation chain to Vision Transformer (ViT)
 5. Maps the key architectural innovations at each step
 6. Synthesizes a narrative of the evolution
-
-This is the difference between *query execution* and *iterative research*.
 
 ## 🏗️ Architecture
 
