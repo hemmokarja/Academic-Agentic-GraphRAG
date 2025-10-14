@@ -1,6 +1,6 @@
 # Agentic GraphRAG Engine for Academic ML/AI Research
 
-An agentic GraphRAG system for exploring machine learning research using graph-based reasoning over scientific publications, built on Linked Papers With Code and enriched with SemOpenAlex metadata.
+An autonomous research assistant that reasons over a knowledge graph of 1.6M entities using multi-step planning and graph traversal. This agentic GraphRAG system explores machine learning research using graph-based reasoning over scientific publications, built on Linked Papers With Code and enriched with SemOpenAlex metadata.
 
 ⚠️ **Note: Currently work in progress**
 
@@ -23,11 +23,51 @@ GraphRAG shines when:
 - The knowledge domain has inherent graph structure (research networks, citation graphs, knowledge bases)
 - Context from connected nodes enhances answer quality
 
+## 🤖 Why Agentic?
+
+While vanilla GraphRAG systems allow LLMs to select and execute graph queries, they typically operate in a **single-shot** manner: plan once, execute once, answer. This system goes further with **autonomous multi-step reasoning**:
+
+- **Iterative exploration**: Observes results and decides if more information is needed
+- **Decomposes complex questions** into sequential graph operations
+- **Adapts strategy** based on intermediate findings (e.g., "These authors aren't relevant, let me try a different path")
+- **Self-reflects** on answer completeness before responding
+- **Executes parallel tool calls** for efficiency when appropriate
+
+**Example**: Ask "Trace the lineage from ResNet to modern vision transformers" 
+
+*Single-shot GraphRAG* might execute one broad citation query and summarize results.
+
+*Agentic GraphRAG autonomously*:
+1. Searches for the ResNet paper
+2. Traverses forward citations to find descendant architectures
+3. Identifies when attention mechanisms entered vision (e.g., SAGAN, Non-local Neural Networks)
+4. Follows the citation chain to Vision Transformer (ViT)
+5. Maps the key architectural innovations at each step
+6. Synthesizes a narrative of the evolution
+
+This is the difference between *query execution* and *iterative research*.
+
+## 💡 What Can You Ask?
+
+**Simple (single-tool queries)**:
+- "Who are the authors of the BERT paper?"
+- "What papers cite Attention Is All You Need?"
+
+**Complex (multi-step agentic reasoning)**:
+- "What other papers have the authors of BERT published?"
+- "Trace the lineage from ResNet to modern vision transformers?"
+- "Who are the most prolific collaborators in self-supervised learning?"
+
+The agent autonomously breaks these down into graph traversal strategies.
+
 ## 🏗️ Architecture
 
 - **Neo4j**: Graph database running in Docker, storing 1.6M nodes and 6.8M relationships
 - **LangGraph**: Orchestrates communication between the agent and language models
-- **Custom ReAct Agent**: Built from scratch, supporting multi-step reasoning, parallel tool calls, and iterative refinement
+- **Custom ReAct Agent**: Built from scratch with:
+  - Multi-step reasoning loops with thought/action/observation cycles
+  - Iterative refinement based on partial results
+  - Dynamic query planning that adapts to graph structure
 - **Graph Tools**: Purpose-built search and traversal functions with Pydantic validation
 - **Streamlit UI**: Interactive chat interface for querying the knowledge graph
 - **Custom RDF Parser**: Processes Linked Papers With Code RDF dumps into Neo4j-compatible graph structure
@@ -152,7 +192,7 @@ Use this procedure to establish a **Remote Connection** in Neo4j Desktop to manu
 ## 🎓 Learning Outcomes
 
 This project demonstrates:
-- Building agentic systems with ReAct-style reasoning loops
+- Implementing ReAct-style agentic loops with tool selection and reasoning
 - Implementing GraphRAG architectures
 - Designing tool-augmented LLM systems
 - Working with Neo4j, Docker, and modern Python tooling
