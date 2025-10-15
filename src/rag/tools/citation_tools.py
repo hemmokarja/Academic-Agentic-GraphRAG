@@ -24,7 +24,7 @@ class PaperCitationsOutInput(BaseModel):
         default=["title", "date", "citationCount"],
         description=(
             "Properties to return for each cited paper. "
-            "Available: title, date, citationCount, abstract, hasUrl, hasArXivId"
+            "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
         )
     )
     order_by: Optional[Literal["date", "citationCount"]] = Field(
@@ -124,7 +124,7 @@ class PaperCitationsInInput(BaseModel):
         default=["title", "date", "citationCount"],
         description=(
             "Properties to return for each citing paper. "
-            "Available: title, date, citationCount, abstract, hasUrl, hasArXivId"
+            "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
         )
     )
     order_by: Optional[Literal["date", "citationCount"]] = Field(
@@ -241,7 +241,7 @@ class PaperCitationChainInput(BaseModel):
         default=["title", "date", "citationCount"],
         description=(
             "Properties to return for each paper. "
-            "Available: title, date, citationCount, abstract, hasUrl, hasArXivId"
+            "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
         )
     )
 
