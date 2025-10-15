@@ -1,4 +1,4 @@
-NEO4J_PASSWORD=your_password
+NEO4J_PASSWORD?=your_password
 NEO4J_DB=lpwc
 
 CONTAINER_NAME=neo4j
