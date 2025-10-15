@@ -29,6 +29,9 @@ def main():
         citation_tools.paper_citations_out,
         citation_tools.paper_citations_in,
         citation_tools.paper_citation_chain,
+        method_tools.method_papers,
+        method_tools.category_papers,
+        method_tools.paper_methods,
         paper_tools.paper_authors,
     ]
     config = AgentConfig(

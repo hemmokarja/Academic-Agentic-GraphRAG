@@ -1,12 +1,12 @@
 # Agentic GraphRAG Engine for ML/AI Research
 
-An autonomous research assistant that reasons over 1.6M scientific entities through multi-step planning and graph traversal. Built on Linked Papers With Code and enriched with SemOpenAlex metadata, this system uses agentic workflows to explore ML research through the relationships between papers, authors, citations, datasets, and methods.
+An autonomous research assistant that reasons over 1.6M scientific entities through multi-step planning and graph traversal. Built on Linked Papers With Code and enriched with SemOpenAlex metadata, this system uses agentic workflows to explore ML research through the relationships between papers, authors, citations, methods, and research areas.
 
 ⚠️ **Note: Project currently under active development**
 
 ## 🎯 Overview
 
-This is a learning project demonstrating AI engineering skills through the implementation of an intelligent agent capable of multi-step reasoning over a large-scale knowledge graph of ML/AI research. Unlike traditional RAG systems that operate on flat document collections, this system leverages the inherent graph structure of academic publications - papers, authors, citations, datasets, and methods - to answer complex queries that require graph traversal and relational reasoning.
+This is a learning project demonstrating AI engineering skills through the implementation of an intelligent agent capable of multi-step reasoning over a large-scale knowledge graph of ML/AI research. Unlike traditional RAG systems that operate on flat document collections, this system leverages the inherent graph structure of academic publications - papers, authors, citations, methods, and research areas - to answer complex queries that require graph traversal and relational reasoning.
 
 ## 💡 What Can You Ask?
 
@@ -18,8 +18,9 @@ This is a learning project demonstrating AI engineering skills through the imple
 - "What other papers have the authors of BERT published?"
 - "Trace the lineage from ResNet to modern vision transformers?"
 - "Who are the most prolific collaborators in self-supervised learning?"
+- "What are the most notable recent developments in the Reinforcement Learning literature?"
 
-The agent autonomously breaks these down into graph traversal strategies.
+The agent autonomously breaks these down into graph traversal strategies by chaining appropriate tool calls.
 
 ## 🕸️ What is GraphRAG?
 
@@ -99,8 +100,11 @@ The agent has access to specialized tools for exploring the knowledge graph:
 - `paper_citations_in` - Find papers that cite a given paper
 - `author_coauthors` - Find an author's collaborators through co-authorship
 - `paper_citation_chain` - Traverse citation chains to explore research lineage or impact
+- `method_papers` - Find all papers that use a specific method
+- `category_papers` - Find all papers in a specific research category
+- `paper_methods` - Find all methods used in a specific paper
 
-**Note**: Current tools focus on Papers and Authors. Additional tools for exploring Datasets, Models, Methods, and other node types are under active development.
+**Note**: Additional tools for exploring Datasets, Models, and other node types are under active development.
 
 ## ⚙️ Prerequisites
 

@@ -8,6 +8,9 @@ FOR (n:Paper) ON EACH [n.title];
 CREATE FULLTEXT INDEX method_search 
 FOR (n:Method) ON EACH [n.name, n.description, n.fullname];
 
+CREATE FULLTEXT INDEX category_search 
+FOR (n:Category) ON EACH [n.name];
+
 CREATE FULLTEXT INDEX dataset_search 
 FOR (n:Dataset) ON EACH [n.title, n.description];
 

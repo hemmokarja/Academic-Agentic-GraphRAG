@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from rag import driver as driver_module
 
 VALID_PROPERTIES = {
-    "Paper": ["title", "date", "citationCount", "abstract", "hasUrl", "hasArXivId"],
+    "Paper": ["title", "date", "citationCount", "abstract", "hasURL", "hasArXivId"],
     "Author": ["name"],
     "Model": ["name", "numberPapers", "introducedYear"],
     "Dataset": ["name", "description", "numberPapers"],
