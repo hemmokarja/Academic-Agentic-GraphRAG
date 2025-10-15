@@ -10,14 +10,14 @@ VALID_PROPERTIES = {
     "Author": ["name"],
     "Model": ["name", "numberPapers", "introducedYear"],
     "Dataset": ["name", "description", "numberPapers"],
-    "Task": ["name", "description"],
     "Method": ["name", "description", "numberPapers", "introducedYear", "codeSnippet", "source"],
+    "Category": ["name"],
 }
 
 
 class FuzzySearchInput(BaseModel):
     """Input schema for fuzzy searching nodes in the knowledge graph."""
-    node_type: Literal["Paper", "Author", "Model", "Dataset", "Task", "Method"] = Field(
+    node_type: Literal["Paper", "Author", "Model", "Dataset", "Category", "Method"] = Field(
         description="The type of node to search for"
     )
     search_query: str = Field(
@@ -42,7 +42,7 @@ class FuzzySearchInput(BaseModel):
             "Model: name, numberPapers | "
             "Dataset: name, description, numberPapers |"
             "Method: name, description, numberPapers, introducedYear, codeSnippet, source |"
-            "Task: name."
+            "Category: name."
         ),
         examples=[
             ["name", "description"],
@@ -128,7 +128,7 @@ def _search_nodes_tx(
         "Author": "author_search",
         "Model": "model_search",
         "Dataset": "dataset_search",
-        "Task": "task_search",
+        "Category": "category_search",
         "Method": "method_search",
     }
 
