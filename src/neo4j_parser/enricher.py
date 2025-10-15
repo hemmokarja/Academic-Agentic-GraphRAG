@@ -1,6 +1,6 @@
+import logging
 import ssl
 import urllib
-import logging
 
 from SPARQLWrapper import JSON, POST, SPARQLWrapper
 from tqdm import tqdm

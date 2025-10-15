@@ -1,7 +1,8 @@
+import logging
 import os
 from typing import Optional
-from neo4j import GraphDatabase, Driver
-import logging
+
+from neo4j import Driver, GraphDatabase
 
 logger = logging.getLogger(__name__)
 
