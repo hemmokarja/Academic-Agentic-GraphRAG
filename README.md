@@ -2,7 +2,7 @@
 
 An autonomous research assistant that reasons over 1.6M scientific entities through multi-step planning and graph traversal. Built on Linked Papers With Code and enriched with SemOpenAlex metadata, this system uses agentic workflows to explore ML research through the relationships between papers, authors, citations, datasets, and methods.
 
-⚠️ **Note: Project currently work in progress**
+⚠️ **Note: Project currently under active development**
 
 ## 🎯 Overview
 
@@ -60,7 +60,7 @@ While vanilla GraphRAG systems allow LLMs to select and execute graph queries, t
 
 ## 🏗️ Architecture
 
-- **Neo4j**: Graph database running in Docker, storing 1.6M nodes and 6.8M relationships
+- **Neo4j**: Graph database running in a Docker container
 - **LangGraph**: Orchestrates communication between the agent and language models
 - **Custom ReAct Agent**: Built from scratch with:
   - Multi-step reasoning loops with thought/action/observation cycles
@@ -79,14 +79,14 @@ While vanilla GraphRAG systems allow LLMs to select and execute graph queries, t
 
 **SemOpenAlex**
 
-[SemOpenAlex](https://semopenalex.org/resource/semopenalex:UniversalSearch) is an extensive RDF knowledge graph containing over 26 billion triples about scientific publications and their associated entities, including authors, institutions, journals, and concepts, licensed under CC0 for free and open access. This project uses SemOpenAlex's SPARQL endpoint to enrich papers with additional metadata and citation relationships.
+[SemOpenAlex](https://semopenalex.org/resource/semopenalex:UniversalSearch) is an extensive RDF knowledge graph containing over 26 billion triples about scientific publications and their associated entities, including authors, institutions, journals, and concepts. This project uses SemOpenAlex's SPARQL endpoint to enrich papers with additional metadata and citation relationships.
 
 ### Graph Statistics
 
 - **~500K** ML and AI papers
 - **~400K** authors
-- **1.6M** total nodes (Papers, Authors, Datasets, Models, Methods, Evaluations, etc.)
-- **6.8M** relationships (citations, authorships, evaluations, implementations, etc.)
+- **~1.6M** total nodes (Papers, Authors, Datasets, Models, Methods, Evaluations, etc.)
+- **~6.8M** relationships (citations, authorships, evaluations, implementations, etc.)
 
 ## 🛠️ Agent Tools
 
@@ -106,13 +106,13 @@ The agent has access to specialized tools for exploring the knowledge graph:
 
 - Docker
 - `uv` package manager
-- Make (for using the Makefile)
+- Make (for Makefile)
 - Neo4j Desktop (recommended but not required)
 - OpenAI API key
 
 **System Requirements**: Parsing LPWC RDF files is resource-intensive. A machine with **>25GB RAM** is recommended.
 
-## 🚀 Quick Start
+## 🚀 Get Started
 
 ### Installation
 
@@ -154,7 +154,7 @@ This launches the Streamlit UI where you can interact with the agent and query t
 make stop
 ```
 
-Stops and removes the Neo4j Docker container.
+Stops and removes the Neo4j Docker container. Database data is preserved on the disk of your local machine.
 
 ### Clean Everything
 
