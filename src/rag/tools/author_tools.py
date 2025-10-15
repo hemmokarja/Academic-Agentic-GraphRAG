@@ -24,7 +24,7 @@ class AuthorPapersInput(BaseModel):
         default=["title", "date", "citationCount"],
         description=(
             "Properties to return for each paper. "
-            "Available: title, date, citationCount, abstract, hasUrl, hasArXivId"
+            "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
         )
     )
     order_by: Optional[Literal["date", "citationCount"]] = Field(

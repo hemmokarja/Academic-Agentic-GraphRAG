@@ -37,7 +37,7 @@ class FuzzySearchInput(BaseModel):
     return_properties: List[str] = Field(
         description=(
             "Specific properties to return. Choose based on the node type."
-            "Paper: title, date, citationCount, abstract, hasUrl, hasArXivId | "
+            "Paper: title, date, citationCount, abstract, hasURL, hasArXivId | "
             "Author: name | "
             "Model: name, numberPapers | "
             "Dataset: name, description, numberPapers |"
