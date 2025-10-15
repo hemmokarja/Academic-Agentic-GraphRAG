@@ -179,6 +179,8 @@ Use this procedure to establish a **Remote Connection** in Neo4j Desktop to manu
 | **Password** | *`your_password`* |
 | **Connection Name** | `lpwc-docker` |
 
+**Note:** This is not required for running the app, but can be used to explore the underlying knowledge graph via a graphical user interface.
+
 ## ⚠️ Known Limitations
 
 - **Data Completeness**: Neither LPWC nor SemOpenAlex are perfect. Some authors, papers, or citation relationships may be missing or incomplete.
