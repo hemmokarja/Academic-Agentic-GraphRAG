@@ -126,6 +126,14 @@ This project uses `uv` for dependency management. Install dependencies with:
 uv sync
 ```
 
+### Neo4j Password
+
+By default, Neo4j password is set at `your_password`. If you want to override this, run:
+
+```bash
+export NEOJ4_PASSWORD=<your_password_here>
+```
+
 ### Initial Setup
 
 ```bash
@@ -146,7 +154,7 @@ This command performs the complete pipeline:
 ### Start Chatting
 
 ```bash
-export OPENAI_API_KEY=your_api_key_here
+export OPENAI_API_KEY=<your_api_key_here>
 make chat
 ```
 
@@ -158,7 +166,13 @@ This launches the Streamlit UI where you can interact with the agent and query t
 make stop
 ```
 
-Stops and removes the Neo4j Docker container. Database data is preserved on the disk of your local machine.
+### Restart the Container
+
+```bash
+make start
+```
+
+Starts the Neo4j Docker container. (Required before running `make chat` if you've stopped the container previously with `make stop`)
 
 ### Clean Everything
 
@@ -180,7 +194,7 @@ Use this procedure to establish a **Remote Connection** in Neo4j Desktop to manu
 | :--- | :--- |
 | **Bolt URI** | `bolt://localhost:7687` |
 | **Username** | `neo4j` |
-| **Password** | *`your_password`* |
+| **Password** | `<password>` (by default `your_password`) |
 | **Connection Name** | `lpwc-docker` |
 
 **Note:** This is not required for running the app, but can be used to explore the underlying knowledge graph via a graphical user interface.
