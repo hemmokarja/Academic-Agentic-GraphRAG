@@ -8,6 +8,14 @@ PAPER_NODE_ID = Field(
         "This is the stable URI identifier for the paper node."
     )
 )
+DATE_FROM = Field(
+    default=None,
+    description="Filter papers published after this date (YYYY-MM-DD or YYYY)"
+)
+DATE_TO = Field(
+    default=None,
+    description="Filter papers published before this date (YYYY-MM-DD or YYYY)"
+)
 
 
 class PaperQueryParams(BaseModel):
@@ -33,11 +41,5 @@ class PaperQueryParams(BaseModel):
 
 class PaperQueryParamsWithDates(PaperQueryParams):
     """Common query parameters for paper search with date filers."""
-    date_from: Optional[str] = Field(
-        default=None,
-        description="Filter papers published after this date (YYYY-MM-DD or YYYY)"
-    )
-    date_to: Optional[str] = Field(
-        default=None,
-        description="Filter papers published before this date (YYYY-MM-DD or YYYY)"
-    )
+    date_from: Optional[str] = DATE_FROM
+    date_to: Optional[str] = DATE_TO

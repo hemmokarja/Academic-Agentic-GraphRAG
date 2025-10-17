@@ -7,15 +7,30 @@ from rag import driver as driver_module
 from rag.tools import shared_models
 from rag.tools.shared_models import PaperQueryParamsWithDates
 
+CATEGORY_NODE_ID = Field(
+    description=(
+        "Unique node identifier (nodeId) for the category, as returned by search_nodes. "
+        "This is the stable URI identifier for the category node."
+    )
+)
+METHOD_NODE_ID = Field(
+    description=(
+        "Unique node identifier (nodeId) for the method, as returned by search_nodes. "
+        "This is the stable URI identifier for the method node."
+    )
+)
+METHOD_RETURN_PROPERTIES = Field(
+    default=["name", "description", "introducedYear", "numberPapers"],
+    description=(
+        "Properties to return for each method. "
+        "Available: name, description, introducedYear, numberPapers"
+    )
+)
+
 
 class MethodPapersInput(PaperQueryParamsWithDates):
     """Input schema for finding papers that use a specific method."""
-    method_node_id: str = Field(
-        description=(
-            "Unique node identifier (nodeId) for the method, as returned by search_nodes. "
-            "This is the stable URI identifier for the method node."
-        )
-    )
+    method_node_id: str = METHOD_NODE_ID
 
 
 @tool(args_schema=MethodPapersInput)
@@ -113,12 +128,7 @@ def _method_papers_tx(
 
 class CategoryPapersInput(PaperQueryParamsWithDates):
     """Input schema for finding papers in a research category."""
-    category_node_id: str = Field(
-        description=(
-            "Unique node identifier (nodeId) for the category, as returned by search_nodes. "
-            "This is the stable URI identifier for the category node."
-        )
-    )
+    category_node_id: str = CATEGORY_NODE_ID
 
 
 @tool(args_schema=CategoryPapersInput)
@@ -219,13 +229,7 @@ def _category_papers_tx(
 class PaperMethodsInput(BaseModel):
     """Input schema for finding methods used in a paper."""
     paper_node_id: str = shared_models.PAPER_NODE_ID
-    return_properties: List[str] = Field(
-        default=["name", "description", "introducedYear", "numberPapers"],
-        description=(
-            "Properties to return for each method. "
-            "Available: name, description, introducedYear, numberPapers"
-        )
-    )
+    return_properties: List[str] = METHOD_RETURN_PROPERTIES
 
 
 @tool(args_schema=PaperMethodsInput)
@@ -280,5 +284,265 @@ def _paper_methods_tx(tx, paper_node_id: str, return_properties: List[str]):
         method_data = {"nodeId": record["nodeId"]}
         method_data.update({prop: record[prop] for prop in return_properties})
         records.append(method_data)
+
+    return records
+
+
+class CategoryMethodsInput(BaseModel):
+    """Input schema for finding methods used in papers from a research category."""
+    category_node_id: str = CATEGORY_NODE_ID
+    return_properties: List[str] = METHOD_RETURN_PROPERTIES
+    limit: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Maximum number of methods to return"
+    )
+    min_papers_in_category: int = Field(
+        default=1,
+        ge=1,
+        description="Minimum number of papers in THIS category that must use the method"
+    )
+    order_by: Literal["usage_count", "introducedYear"] = Field(
+        default="usage_count",
+        description=(
+            "Sort by: usage_count (papers in category using method, descending), "
+            "or introducedYear (newest first)"
+        )
+    )
+    date_from: Optional[str] = shared_models.DATE_FROM
+    date_to: Optional[str] = shared_models.DATE_TO
+
+
+@tool(args_schema=CategoryMethodsInput)
+def category_methods(
+    category_node_id: str,
+    return_properties: List[str],
+    limit: int,
+    min_papers_in_category: int = 1,
+    order_by: str = "usage_count",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Find methods used in papers from a specific research category.
+
+    Traversal pattern: Category <- [:CATEGORY|MAIN_CATEGORY] <- Method <- HAS_METHOD <- Paper
+
+    Use this when you need to:
+    - Discover what techniques are popular in a research area
+    - Compare method usage across categories
+    - Find dominant methods in a field during a time period
+    - Identify emerging techniques in a category
+
+    Returns:
+        List of methods with nodeId, requested properties, and papers_in_category 
+        (number of papers in this category using the method, respecting date filters).
+        Note: method.numberPapers shows total papers across ALL categories.
+        Ordered by papers_in_category, introducedYear, or name.
+        Empty list if category not found or has no methods meeting criteria.
+    """
+    driver = driver_module.get_neo4j_driver()
+    try:
+        with driver.session() as session:
+            result = session.execute_read(
+                _category_methods_tx,
+                category_node_id,
+                return_properties,
+                limit,
+                min_papers_in_category,
+                order_by,
+                date_from,
+                date_to,
+            )
+            return result
+    except Exception as e:
+        return [{"error": str(e), "message": "Failed to retrieve category methods"}]
+
+
+def _category_methods_tx(
+    tx,
+    category_node_id: str,
+    return_properties: List[str],
+    limit: int,
+    min_papers_in_category: int = 1,
+    order_by: str = "usage_count",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    params = {
+        "category_node_id": category_node_id,
+        "limit": limit,
+        "min_papers": min_papers_in_category,
+    }
+
+    return_items = (
+        ["method.nodeId AS nodeId"]
+        + [f"method.{prop} AS {prop}" for prop in return_properties]
+        + ["papers_in_category"]
+    )
+    return_clause = ", ".join(return_items)
+
+    where_conditions = ["category.nodeId = $category_node_id"]
+    if date_from:
+        where_conditions.append("paper.date >= $date_from")
+        params["date_from"] = date_from
+    if date_to:
+        where_conditions.append("paper.date <= $date_to")
+        params["date_to"] = date_to
+
+    where_clause = "WHERE " + " AND ".join(where_conditions)
+
+    # order clause mapping
+    if order_by == "usage_count":
+        order_clause = "papers_in_category DESC, method.name ASC"
+    elif order_by == "introducedYear":
+        order_clause = "method.introducedYear DESC, method.name ASC"
+    else:
+        raise ValueError(f"Unknown order_by value {order_by}")
+
+    # TODO fix papers_in_category
+    query = f"""
+    MATCH (category:Category)<-[:CATEGORY|MAIN_CATEGORY]-(method:Method)<-[:HAS_METHOD]-(paper:Paper)
+    {where_clause}
+    WITH method, COUNT(DISTINCT paper) AS papers_in_category
+    WHERE papers_in_category >= $min_papers
+    RETURN {return_clause}
+    ORDER BY {order_clause}
+    LIMIT $limit
+    """
+
+    result = tx.run(query, **params)
+
+    records = []
+    for record in result:
+        method_data = {"nodeId": record["nodeId"]}
+        method_data.update({prop: record[prop] for prop in return_properties})
+        method_data["papers_in_category"] = record["papers_in_category"]
+        records.append(method_data)
+
+    return records
+
+
+class MethodCategoriesInput(BaseModel):
+    """Input schema for finding research categories where a method is used."""
+    method_node_id: str = METHOD_NODE_ID
+    return_properties: List[str] = Field(
+        default=["name"],
+        description="Properties to return for each category. Available: name"
+    )
+    limit: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Maximum number of categories to return"
+    )
+    min_papers: int = Field(
+        default=1,
+        ge=1,
+        description="Minimum number of papers in a category that must use this method"
+    )
+    date_from: Optional[str] = shared_models.DATE_FROM
+    date_to: Optional[str] = shared_models.DATE_TO
+
+
+@tool(args_schema=MethodCategoriesInput)
+def method_categories(
+    method_node_id: str,
+    return_properties: List[str],
+    limit: int,
+    min_papers: int = 1,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Find research categories where a specific method is used.
+
+    Traversal pattern: Method -[:CATEGORY|MAIN_CATEGORY]-> Category
+    Then count: Method <- HAS_METHOD <- Paper (filtered)
+
+    Use this when you need to:
+    - Identify research areas where a technique is applied
+    - Track cross-domain adoption of a method
+    - Discover unexpected applications of a technique
+    - Understand the reach of a method across fields
+
+    Returns:
+        List of categories with nodeId, requested properties, and papers_in_category
+        (number of papers in that category using the method, respecting date filters).
+        Ordered by papers_in_category descending (most used categories first).
+        Empty list if method not found or has no categories meeting criteria.
+    """
+    driver = driver_module.get_neo4j_driver()
+    try:
+        with driver.session() as session:
+            result = session.execute_read(
+                _method_categories_tx,
+                method_node_id,
+                return_properties,
+                limit,
+                min_papers,
+                date_from,
+                date_to,
+            )
+            return result
+    except Exception as e:
+        return [{"error": str(e), "message": "Failed to retrieve method categories"}]
+
+
+def _method_categories_tx(
+    tx,
+    method_node_id: str,
+    return_properties: List[str],
+    limit: int,
+    min_papers: int,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    params = {
+        "method_node_id": method_node_id,
+        "limit": limit,
+        "min_papers": min_papers,
+    }
+
+    return_items = (
+        ["category.nodeId AS nodeId"]
+        + [f"category.{prop} AS {prop}" for prop in return_properties]
+        + ["papers_in_category"]
+    )
+    return_clause = ", ".join(return_items)
+
+    where_conditions = ["method.nodeId = $method_node_id"]
+    
+    if date_from:
+        where_conditions.append("paper.date >= $date_from")
+        params["date_from"] = date_from
+    
+    if date_to:
+        where_conditions.append("paper.date <= $date_to")
+        params["date_to"] = date_to
+    
+    where_clause = "WHERE " + " AND ".join(where_conditions)
+
+    # TODO fix papers_in_category
+    query = f"""
+    MATCH (method:Method)<-[:HAS_METHOD]-(paper:Paper),
+          (method)-[:CATEGORY|MAIN_CATEGORY]->(category:Category)
+    {where_clause}
+    WITH category, COUNT(DISTINCT paper) AS papers_in_category
+    WHERE papers_in_category >= $min_papers
+    RETURN {return_clause}
+    ORDER BY papers_in_category DESC, category.name ASC
+    LIMIT $limit
+    """
+
+    result = tx.run(query, **params)
+
+    records = []
+    for record in result:
+        category_data = {"nodeId": record["nodeId"]}
+        category_data.update({prop: record[prop] for prop in return_properties})
+        category_data["papers_in_category"] = record["papers_in_category"]
+        records.append(category_data)
 
     return records

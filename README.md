@@ -102,6 +102,8 @@ The agent has access to specialized tools for exploring the knowledge graph:
 - `paper_citation_chain` - Traverse citation chains to explore research lineage or impact
 - `method_papers` - Find all papers that use a specific method
 - `category_papers` - Find all papers in a specific research category
+- `category_methods` - Find methods used in papers from a specific research category
+- `method_categories` - Find research categories where a specific method is used
 - `paper_methods` - Find all methods used in a specific paper
 
 **Note**: Additional tools for exploring Datasets, Models, and other node types are under active development.

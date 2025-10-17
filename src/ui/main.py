@@ -32,6 +32,8 @@ def main():
         method_tools.method_papers,
         method_tools.category_papers,
         method_tools.paper_methods,
+        method_tools.category_methods,
+        method_tools.method_categories,
         paper_tools.paper_authors,
     ]
     config = AgentConfig(
