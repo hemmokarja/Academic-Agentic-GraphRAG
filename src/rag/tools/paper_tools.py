@@ -4,16 +4,12 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from rag import driver as driver_module
+from rag.tools import shared_models
 
 
 class PaperAuthorsInput(BaseModel):
     """Input schema for finding authors of a paper."""
-    paper_node_id: str = Field(
-        description=(
-            "Unique node identifier (nodeId) for the paper, as returned by search_nodes. "
-            "This is the stable URI identifier for the paper node."
-        )
-    )
+    paper_node_id: str = shared_models.PAPER_NODE_ID
     return_properties: List[str] = Field(
         default=["name"],
         description=(

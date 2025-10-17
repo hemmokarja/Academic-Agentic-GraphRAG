@@ -4,32 +4,17 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from rag import driver as driver_module
+from rag.tools import shared_models
+from rag.tools.shared_models import PaperQueryParamsWithDates
 
 
-class MethodPapersInput(BaseModel):
+class MethodPapersInput(PaperQueryParamsWithDates):
     """Input schema for finding papers that use a specific method."""
     method_node_id: str = Field(
         description=(
             "Unique node identifier (nodeId) for the method, as returned by search_nodes. "
             "This is the stable URI identifier for the method node."
         )
-    )
-    limit: int = Field(
-        default=50,
-        ge=1,
-        le=200,
-        description="Maximum number of papers to return"
-    )
-    return_properties: List[str] = Field(
-        default=["title", "date", "citationCount"],
-        description=(
-            "Properties to return for each paper. "
-            "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
-        )
-    )
-    order_by: Optional[Literal["date", "citationCount"]] = Field(
-        default="date",
-        description="Sort by date (newest first) or citation count (highest first)"
     )
 
 
@@ -38,7 +23,9 @@ def method_papers(
     method_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str]
+    order_by: Optional[str] = "date",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Find all papers that use a specific method.
@@ -62,7 +49,9 @@ def method_papers(
                 method_node_id,
                 limit,
                 return_properties,
-                order_by
+                order_by,
+                date_from,
+                date_to,
             )
             return result
     except Exception as e:
@@ -74,26 +63,44 @@ def _method_papers_tx(
     method_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str]
+    order_by: Optional[str] = "date",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ):
+    params = {
+        "method_node_id": method_node_id,
+        "limit": limit,
+    }
+
     return_items = (
         ["paper.nodeId AS nodeId"]
         + [f"paper.{prop} AS {prop}" for prop in return_properties]
     )
     return_clause = ", ".join(return_items)
 
+    where_conditions = ["method.nodeId = $method_node_id"]
+    if date_from:
+        where_conditions.append("paper.date >= $date_from")
+        params["date_from"] = date_from
+    if date_to:
+        where_conditions.append("paper.date <= $date_to")
+        params["date_to"] = date_to
+
+    where_clause = "WHERE " + " AND ".join(where_conditions)
+
     order_clause = (
         "paper.date DESC" if order_by == "date" else "paper.citationCount DESC"
     )
 
     query = f"""
-    MATCH (method:Method {{nodeId: $method_node_id}})<-[:HAS_METHOD]-(paper:Paper)
+    MATCH (method:Method)<-[:HAS_METHOD]-(paper:Paper)
+    {where_clause}
     RETURN {return_clause}
     ORDER BY {order_clause}
     LIMIT $limit
     """
 
-    result = tx.run(query, method_node_id=method_node_id, limit=limit)
+    result = tx.run(query, **params)
 
     records = []
     for record in result:
@@ -104,30 +111,13 @@ def _method_papers_tx(
     return records
 
 
-class CategoryPapersInput(BaseModel):
+class CategoryPapersInput(PaperQueryParamsWithDates):
     """Input schema for finding papers in a research category."""
     category_node_id: str = Field(
         description=(
             "Unique node identifier (nodeId) for the category, as returned by search_nodes. "
             "This is the stable URI identifier for the category node."
         )
-    )
-    limit: int = Field(
-        default=50,
-        ge=1,
-        le=200,
-        description="Maximum number of papers to return"
-    )
-    return_properties: List[str] = Field(
-        default=["title", "date", "citationCount"],
-        description=(
-            "Properties to return for each paper. "
-            "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
-        )
-    )
-    order_by: Optional[Literal["date", "citationCount"]] = Field(
-        default="date",
-        description="Sort by date (newest first) or citation count (highest first)"
     )
 
 
@@ -136,7 +126,9 @@ def category_papers(
     category_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str]
+    order_by: Optional[str] = "date",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Find all papers in a specific research category.
@@ -160,7 +152,9 @@ def category_papers(
                 category_node_id,
                 limit,
                 return_properties,
-                order_by
+                order_by,
+                date_from,
+                date_to,
             )
             return result
     except Exception as e:
@@ -172,26 +166,46 @@ def _category_papers_tx(
     category_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str]
+    order_by: Optional[str] = "date",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ):
+    params = {
+        "category_node_id": category_node_id,
+        "limit": limit,
+    }
+
     return_items = (
         ["paper.nodeId AS nodeId"]
         + [f"paper.{prop} AS {prop}" for prop in return_properties]
     )
     return_clause = ", ".join(return_items)
 
+    where_conditions = ["category.nodeId = $category_node_id"]
+    
+    if date_from:
+        where_conditions.append("paper.date >= $date_from")
+        params["date_from"] = date_from
+    
+    if date_to:
+        where_conditions.append("paper.date <= $date_to")
+        params["date_to"] = date_to
+    
+    where_clause = "WHERE " + " AND ".join(where_conditions)
+
     order_clause = (
         "paper.date DESC" if order_by == "date" else "paper.citationCount DESC"
     )
 
     query = f"""
-    MATCH (category:Category {{nodeId: $category_node_id}})<-[:CATEGORY|MAIN_CATEGORY]-(method:Method)<-[:HAS_METHOD]-(paper:Paper)
+    MATCH (category:Category)<-[:CATEGORY|MAIN_CATEGORY]-(method:Method)<-[:HAS_METHOD]-(paper:Paper)
+    {where_clause}
     RETURN {return_clause}
     ORDER BY {order_clause}
     LIMIT $limit
     """
 
-    result = tx.run(query, category_node_id=category_node_id, limit=limit)
+    result = tx.run(query, **params)
 
     records = []
     for record in result:
@@ -204,12 +218,7 @@ def _category_papers_tx(
 
 class PaperMethodsInput(BaseModel):
     """Input schema for finding methods used in a paper."""
-    paper_node_id: str = Field(
-        description=(
-            "Unique node identifier (nodeId) for the paper, as returned by search_nodes. "
-            "This is the stable URI identifier for the paper node."
-        )
-    )
+    paper_node_id: str = shared_models.PAPER_NODE_ID
     return_properties: List[str] = Field(
         default=["name", "description", "introducedYear", "numberPapers"],
         description=(

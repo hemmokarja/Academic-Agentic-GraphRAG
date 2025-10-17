@@ -4,41 +4,21 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from rag import driver as driver_module
+from rag.tools import shared_models
+from rag.tools.shared_models import PaperQueryParams
 
 
-class PaperCitationsOutInput(BaseModel):
+class PaperCitationsInput(PaperQueryParams):
     """Input schema for finding papers that a given paper cites (references)."""
-    paper_node_id: str = Field(
-        description=(
-            "Unique node identifier (nodeId) for the paper, as returned by search_nodes. "
-            "This is the stable URI identifier for the paper node."
-        )
-    )
-    limit: int = Field(
-        default=50,
-        ge=1,
-        le=200,
-        description="Maximum number of cited papers to return"
-    )
-    return_properties: List[str] = Field(
-        default=["title", "date", "citationCount"],
-        description=(
-            "Properties to return for each cited paper. "
-            "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
-        )
-    )
-    order_by: Optional[Literal["date", "citationCount"]] = Field(
-        default="citationCount",
-        description="Sort by date (newest first) or citation count (highest first)"
-    )
+    paper_node_id: str = shared_models.PAPER_NODE_ID
 
 
-@tool(args_schema=PaperCitationsOutInput)
+@tool(args_schema=PaperCitationsInput)
 def paper_citations_out(
     paper_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str]
+    order_by: Optional[str] = "date"
 ) -> List[Dict[str, Any]]:
     """
     Find papers that are cited by (referenced in) a specific paper.
@@ -75,7 +55,7 @@ def _paper_citations_out_tx(
     paper_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str]
+    order_by: Optional[str] = "date"
 ):
     """Transaction function for outbound citations."""
     return_items = (
@@ -106,39 +86,12 @@ def _paper_citations_out_tx(
     return records
 
 
-class PaperCitationsInInput(BaseModel):
-    """Input schema for finding papers that cite a given paper."""
-    paper_node_id: str = Field(
-        description=(
-            "Unique node identifier (nodeId) for the paper, as returned by search_nodes. "
-            "This is the stable URI identifier for the paper node."
-        )
-    )
-    limit: int = Field(
-        default=50,
-        ge=1,
-        le=200,
-        description="Maximum number of citing papers to return"
-    )
-    return_properties: List[str] = Field(
-        default=["title", "date", "citationCount"],
-        description=(
-            "Properties to return for each citing paper. "
-            "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
-        )
-    )
-    order_by: Optional[Literal["date", "citationCount"]] = Field(
-        default="date",
-        description="Sort by date (newest first) or citation count (highest first)"
-    )
-
-
-@tool(args_schema=PaperCitationsInInput)
+@tool(args_schema=PaperCitationsInput)
 def paper_citations_in(
     paper_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str]
+    order_by: Optional[str] = "date"
 ) -> List[Dict[str, Any]]:
     """
     Find papers that cite a specific paper.
@@ -206,42 +159,14 @@ def _paper_citations_in_tx(
     return records
 
 
-class PaperCitationChainInput(BaseModel):
+class PaperCitationChainInput(PaperCitationsInput):
     """Input schema for multi-hop citation traversal."""
-    paper_node_id: str = Field(
-        description=(
-            "Unique node identifier (nodeId) for the paper, as returned by search_nodes. "
-            "This is the stable URI identifier for the paper node."
-        )
-    )
     direction: Literal["forward", "backward", "both"] = Field(
         description=(
             "Citation chain direction:\n"
             "- 'forward': Papers that cite this paper (influence/impact)\n"
             "- 'backward': Papers this paper cites (foundations/lineage)\n"
             "- 'both': All connected papers in citation network"
-        )
-    )
-    max_depth: int = Field(
-        default=2,
-        ge=1,
-        le=4,
-        description=(
-            "Maximum traversal depth (number of citation hops). "
-            "Warning: depth > 3 can be extremely slow!"
-        )
-    )
-    limit: int = Field(
-        default=50,
-        ge=1,
-        le=200,
-        description="Maximum total papers to return across all depths"
-    )
-    return_properties: List[str] = Field(
-        default=["title", "date", "citationCount"],
-        description=(
-            "Properties to return for each paper. "
-            "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
         )
     )
 

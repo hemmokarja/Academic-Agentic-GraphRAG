@@ -202,8 +202,8 @@ All traversal tools require `nodeId` as input and return `nodeId` for discovered
 ```
 1. search_nodes(node_type="Method", search_query="LSTM")
    → Get method_node_id
-2. method_papers(method_node_id="<nodeId>", order_by="citationCount", limit=20)
-   → Find influential papers using this method
+2. method_papers(method_node_id="<nodeId>", order_by="citationCount", limit=20, date_to=2005)
+   → Find early influential papers using this method
 3. paper_authors(paper_node_id="<top_paper_nodeId>")
    → Explore who's working with this technique
 ```
@@ -212,7 +212,7 @@ All traversal tools require `nodeId` as input and return `nodeId` for discovered
 ```
 1. search_nodes(node_type="Category", search_query="image generation")
    → Get category_node_id
-2. category_papers(category_node_id="<nodeId>", order_by="date", limit=30)
+2. category_papers(category_node_id="<nodeId>", order_by="date", limit=30, date_from=2020)
    → Find recent papers in this area
 3. paper_methods(paper_node_id="<recent_paper_nodeId>")
    → See what techniques are being used
