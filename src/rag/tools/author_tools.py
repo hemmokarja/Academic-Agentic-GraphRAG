@@ -24,7 +24,7 @@ def author_papers(
     author_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str] = "date",
+    order_by: Optional[str] = "date_desc",
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
@@ -64,7 +64,7 @@ def _author_papers_tx(
     author_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str] = "date",
+    order_by: Optional[str] = "date_desc",
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ):
@@ -89,9 +89,12 @@ def _author_papers_tx(
     
     where_clause = "WHERE " + " AND ".join(where_conditions)
 
-    order_clause = (
-        "paper.date DESC" if order_by == "date" else "paper.citationCount DESC"
-    )
+    if order_by == "date_desc":
+        order_clause = "paper.date DESC"
+    elif order_by == "date_asc":
+        order_clause = "paper.date ASC"
+    else:
+        order_clause = "paper.citationCount DESC"
 
     query = f"""
     MATCH (author:Author)<-[:HAS_AUTHOR]-(paper:Paper)

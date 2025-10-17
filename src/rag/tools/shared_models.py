@@ -33,9 +33,12 @@ class PaperQueryParams(BaseModel):
             "Available: title, date, citationCount, abstract, hasURL, hasArXivId"
         )
     )
-    order_by: Optional[Literal["date", "citationCount"]] = Field(
-        default="date",
-        description="Sort by date (newest first) or citation count (highest first)"
+    order_by: Optional[Literal["date_desc", "date_asc", "citationCount"]] = Field(
+        default="date_desc",
+        description=(
+            "Sort by date_desc (newest first), date_asc (oldest_first), or citation "
+            "count (highest first)"
+        )
     )
 
 

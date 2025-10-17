@@ -186,7 +186,7 @@ All traversal tools require `nodeId` as input and return `nodeId` for discovered
    → Get author_node_id
 2. author_coauthors(author_node_id="<nodeId>", min_collaborations=2)
    → Get coauthor nodeIds
-3. author_papers(author_node_id="<coauthor_nodeId>", order_by="date")
+3. author_papers(author_node_id="<coauthor_nodeId>", order_by="date_desc")
 ```
 
 ### Pattern 5: Cross-Author Exploration
@@ -212,7 +212,7 @@ All traversal tools require `nodeId` as input and return `nodeId` for discovered
 ```
 1. search_nodes(node_type="Category", search_query="image generation")
    → Get category_node_id
-2. category_papers(category_node_id="<nodeId>", order_by="date", limit=30, date_from=2020)
+2. category_papers(category_node_id="<nodeId>", order_by="date_desc", limit=30, date_from=2020)
    → Find recent papers in this area
 3. paper_methods(paper_node_id="<recent_paper_nodeId>")
    → See what techniques are being used
@@ -224,7 +224,7 @@ All traversal tools require `nodeId` as input and return `nodeId` for discovered
    → Get paper_node_id
 2. paper_methods(paper_node_id="<nodeId>")
    → Get method nodeIds and understand the techniques
-3. method_papers(method_node_id="<key_method_nodeId>", order_by="date")
+3. method_papers(method_node_id="<key_method_nodeId>", order_by="date_desc")
    → Find other papers using the same techniques
 ```
 
@@ -232,7 +232,7 @@ All traversal tools require `nodeId` as input and return `nodeId` for discovered
 ```
 1. search_nodes(node_type="Method", search_query="attention mechanism")
    → Get method_node_id
-2. method_papers(method_node_id="<nodeId>", order_by="date", limit=100)
+2. method_papers(method_node_id="<nodeId>", order_by="date_asc", limit=100)
    → Track papers over time
 3. Analyze temporal patterns in the results to understand adoption trends
 ```
@@ -245,7 +245,7 @@ All traversal tools require `nodeId` as input and return `nodeId` for discovered
    → Get top papers in category
 3. paper_methods(paper_node_id="<influential_paper_nodeId>")
    → See what optimization methods are used
-4. method_papers(method_node_id="<method_nodeId>", order_by="date")
+4. method_papers(method_node_id="<method_nodeId>", order_by="date_desc")
    → Find recent applications of that method
 ```
 
@@ -343,7 +343,7 @@ Would you like to explore any of these papers further or see recent applications
 
 [Execute search_nodes(node_type="Category", search_query="image generation")]
 [Save category_node_id from result]
-[Execute category_papers(category_node_id=<saved_id>, order_by="date", limit=20)]
+[Execute category_papers(category_node_id=<saved_id>, order_by="date_desc", limit=20)]
 
 Here are some recent papers in image generation:
 
@@ -362,7 +362,7 @@ The field has seen significant advances with diffusion models. Would you like to
 
 - **Always use nodeId for traversals**: Extract `nodeId` from search results and use it in all traversal tool calls
 - **Display human-readable properties**: Show users titles and names, not nodeIds (which are internal identifiers)
-- **Sort strategically**: Choose `order_by` based on whether recency or influence matters
+- **Sort strategically**: Use `order_by` to prioritize recent, early, or influential papers.
 - **Respect limits**: Citation chains and large paper networks can be expensive - use reasonable depth/limit values
 - **Stay factual**: Report only what exists in the graph; don't infer or assume relationships
 - **nodeId is your linking key**: Every search result and traversal result includes `nodeId` - use it to chain operations

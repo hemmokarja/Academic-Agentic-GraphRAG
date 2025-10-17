@@ -18,7 +18,7 @@ def paper_citations_out(
     paper_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str] = "date"
+    order_by: Optional[str] = "date_desc"
 ) -> List[Dict[str, Any]]:
     """
     Find papers that are cited by (referenced in) a specific paper.
@@ -55,7 +55,7 @@ def _paper_citations_out_tx(
     paper_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str] = "date"
+    order_by: Optional[str] = "date_desc"
 ):
     """Transaction function for outbound citations."""
     return_items = (
@@ -64,9 +64,12 @@ def _paper_citations_out_tx(
     )
     return_clause = ", ".join(return_items)
 
-    order_clause = (
-        "cited.date DESC" if order_by == "date" else "cited.citationCount DESC"
-    )
+    if order_by == "date_desc":
+        order_clause = "cited.date DESC"
+    elif order_by == "date_asc":
+        order_clause = "cited.date ASC"
+    else:
+        order_clause = "cited.citationCount DESC"
 
     query = f"""
     MATCH (paper:Paper {{nodeId: $paper_node_id}})-[:CITES]->(cited:Paper)
@@ -91,7 +94,7 @@ def paper_citations_in(
     paper_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str] = "date"
+    order_by: Optional[str] = "date_desc"
 ) -> List[Dict[str, Any]]:
     """
     Find papers that cite a specific paper.
@@ -128,7 +131,7 @@ def _paper_citations_in_tx(
     paper_node_id: str,
     limit: int,
     return_properties: List[str],
-    order_by: Optional[str]
+    order_by: Optional[str] = "date_desc"
 ):
     """Transaction function for inbound citations."""
     return_items = (
@@ -137,9 +140,12 @@ def _paper_citations_in_tx(
     )
     return_clause = ", ".join(return_items)
 
-    order_clause = (
-        "citing.date DESC" if order_by == "date" else "citing.citationCount DESC"
-    )
+    if order_by == "date_desc":
+        order_clause = "citing.date DESC"
+    elif order_by == "date_asc":
+        order_clause = "citing.date ASC"
+    else:
+        order_clause = "citing.citationCount DESC"
 
     query = f"""
     MATCH (paper:Paper {{nodeId: $paper_node_id}})<-[:CITES]-(citing:Paper)
