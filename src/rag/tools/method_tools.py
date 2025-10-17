@@ -401,7 +401,26 @@ def _category_methods_tx(
     else:
         raise ValueError(f"Unknown order_by value {order_by}")
 
-    # TODO fix papers_in_category
+    # Note: Counting papers per method for a given category contains a subtlety due to
+    # the graph structure:
+    #
+    # - Papers are never directly assigned to categories; they are connected to
+    #   categories only via the methods they implement.
+    # - This query returns all methods linked to the given category. For each method,
+    #   it counts the number of papers that implement that method **and are connected
+    #   to the category via the method itself**.
+    #
+    # This means:
+    # - Every paper implementing a method will be counted for each category that the
+    #   method belongs to.
+    # - Methods linked to multiple categories can appear to have high usage counts in a
+    #   category even if most papers are actually about another category.
+    # - For example, in the 'Language Models' category, 'Diffusion' may appear as the
+    #   most-used method, even though in practice most diffusion papers are about image
+    #   generation. This occurs because the 'Diffusion' method node is linked to both
+    #   categories, so every paper implementing it is counted under both.
+    #
+    # This is not a bug; it reflects the semantics of the current graph structure.
     query = f"""
     MATCH (category:Category)<-[:CATEGORY|MAIN_CATEGORY]-(method:Method)<-[:HAS_METHOD]-(paper:Paper)
     {where_clause}
@@ -524,7 +543,25 @@ def _method_categories_tx(
     
     where_clause = "WHERE " + " AND ".join(where_conditions)
 
-    # TODO fix papers_in_category
+    # Note: Counting papers per category for a given method contains a subtlety due to
+    # the graph structure:
+    #
+    # - Papers are never directly assigned to categories; they are connected to
+    #   categories only via the methods they implement.
+    # - For a given method M, this query returns all categories that M is assigned to.
+    #   For each category, it counts the number of papers that implement M **and are
+    #   connected to that category via M itself**.
+    #
+    # This means:
+    # - Every paper implementing M will be counted for each category that M belongs to.
+    # - If M is linked to multiple categories, the same paper can appear in the count
+    #   for multiple categories.
+    # - As a result, seemingly unintuitive results can occur, e.g., the number of papers
+    #   implementing 'Diffusion' can be identical for both Image Generation and Language
+    #   Models, even though in practice most diffusion papers are about image generation.
+    #
+    # This is not a bug; it simply reflects the current semantics of category membership
+    # in the graph.
     query = f"""
     MATCH (method:Method)<-[:HAS_METHOD]-(paper:Paper),
           (method)-[:CATEGORY|MAIN_CATEGORY]->(category:Category)
