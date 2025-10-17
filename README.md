@@ -128,7 +128,7 @@ uv sync
 
 ### Neo4j Password
 
-By default, Neo4j password is set at `your_password`. If you want to override this, run:
+By default, Neo4j password is set at `your_password`. You can override this by setting the `NEOJ4_PASSWORD` environment variable when running `make` commands:
 
 ```bash
 export NEOJ4_PASSWORD=<your_password_here>
