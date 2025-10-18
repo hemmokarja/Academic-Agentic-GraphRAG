@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 
 from rag import driver
 from rag.agent import AgentConfig, ReActAgent
-from rag.tools import search, author_tools, citation_tools, method_tools, paper_tools
+from rag.tools import author_tools, citation_tools, method_tools, paper_tools, search_tools
 from ui import chat
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def main():
 
     llm = ChatOpenAI(model="gpt-4.1")
     tools = [
-        search.search_nodes,
+        search_tools.search_nodes,
         author_tools.author_papers,
         author_tools.author_coauthors,
         citation_tools.paper_citations_out,
