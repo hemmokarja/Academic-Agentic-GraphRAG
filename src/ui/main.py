@@ -27,18 +27,18 @@ def main():
     tools = [
         search_tools.search_nodes,
         author_tools.author_papers,
+        author_tools.paper_authors,
         author_tools.author_coauthors,
         citation_tools.paper_citations_out,
         citation_tools.paper_citations_in,
         citation_tools.paper_citation_chain,
         method_tools.method_papers,
-        method_tools.category_papers,
         method_tools.paper_methods,
-        method_tools.category_methods,
-        method_tools.method_categories,
         method_tools.task_papers,
         method_tools.paper_tasks,
-        paper_tools.paper_authors,
+        method_tools.category_papers,
+        method_tools.category_methods,
+        method_tools.method_categories,
     ]
     config = AgentConfig(
         max_iterations=10,
