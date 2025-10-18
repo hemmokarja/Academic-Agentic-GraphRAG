@@ -76,7 +76,7 @@ While vanilla GraphRAG systems allow LLMs to select and execute graph queries, t
 
 **Linked Papers With Code (LPWC)**
 
-[LPWC](https://github.com/metaphacts/linkedpaperswithcode) is an RDF knowledge graph that comprehensively models the machine learning research field, containing information about almost 500,000 ML publications including tasks addressed, datasets utilized, methods implemented, and evaluations performed. This rich structured representation provides the foundation for graph-based reasoning over ML research.
+[LPWC](https://github.com/metaphacts/linkedpaperswithcode) is an RDF knowledge graph that comprehensively models the machine learning research field, containing information about almost 500,000 ML publications including tasks addressed, datasets utilized, methods implemented, and evaluations performed. By linking different scientific entities, it enables deeper insights into how machine learning research evolves and connects.
 
 **SemOpenAlex**
 
