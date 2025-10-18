@@ -38,7 +38,7 @@ def chat(
     # display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            st.markdown(message["content"], unsafe_allow_html=True)
 
     if prompt := st.chat_input("What would you like to know?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -59,7 +59,7 @@ def chat(
 
             # start with initial thinking message
             full_response = handler.get_thinking_message(iteration=1)
-            message_placeholder.markdown(full_response)
+            message_placeholder.markdown(full_response, unsafe_allow_html=True)
 
             try:
                 for chunk in st.session_state.agent.stream(
@@ -68,7 +68,9 @@ def chat(
                     chunk_text = handler.process_chunk(chunk)
                     if chunk_text:
                         full_response += chunk_text
-                        message_placeholder.markdown(full_response)
+                        message_placeholder.markdown(
+                            full_response, unsafe_allow_html=True
+                        )
 
                 # store the final response
                 st.session_state.messages.append(

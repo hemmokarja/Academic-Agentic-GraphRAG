@@ -58,12 +58,20 @@ class StreamHandler:
             input_price = self.pricing["input"] * (input_tokens / 1e6)
             output_price = self.pricing["output"] * (output_tokens / 1e6)
             total_price = input_price + output_price
-
-        return (
-            f"\n---\n"
-            f"Token usage: {input_tokens:,} input + {output_tokens:,} output "
-            f"= {total_tokens:,} total (${total_price:.4f})\n"
-        )
+            
+            return (
+                f"\n<sub style='color: #888; font-style: italic;'>"
+                f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ "
+                f"= {total_tokens:,} tokens • ${total_price:.4f}"
+                f"</sub>\n"
+            )
+        else:
+            return (
+                f"\n<sub style='color: #888; font-style: italic;'>"
+                f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ "
+                f"= {total_tokens:,} tokens"
+                f"</sub>\n"
+            )
 
     def _handle_agent_chunk(self, chunk):
         agent_data = chunk["agent"]
