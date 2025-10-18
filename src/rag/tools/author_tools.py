@@ -192,6 +192,7 @@ def _author_coauthors_tx(
     RETURN
         coauthor.nodeId AS nodeId,
         coauthor.name AS name,
+        coauthor.hIndex AS hIndex,
         collaboration_count,
         first_collaboration,
         last_collaboration
@@ -211,6 +212,7 @@ def _author_coauthors_tx(
         coauthor_data = {
             "nodeId": record["nodeId"],
             "name": record["name"],
+            "hIndex": record["hIndex"],
             "collaboration_count": record["collaboration_count"],
             "first_collaboration": record["first_collaboration"],
             "last_collaboration": record["last_collaboration"]

@@ -1,7 +1,7 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List
 
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from rag import driver as driver_module
 from rag.tools import shared_models
@@ -10,19 +10,10 @@ from rag.tools import shared_models
 class PaperAuthorsInput(BaseModel):
     """Input schema for finding authors of a paper."""
     paper_node_id: str = shared_models.PAPER_NODE_ID
-    return_properties: List[str] = Field(
-        default=["name"],
-        description=(
-            "Properties to return for each author. Currently only 'name' is available."
-        )
-    )
 
 
 @tool(args_schema=PaperAuthorsInput)
-def paper_authors(
-    paper_node_id: str,
-    return_properties: List[str]
-) -> List[Dict[str, Any]]:
+def paper_authors(paper_node_id: str) -> List[Dict[str, Any]]:
     """
     Find all authors of a specific paper.
 
@@ -34,7 +25,7 @@ def paper_authors(
     - Get authors as input for finding collaborators
 
     Returns:
-        List of authors with nodeId and requested properties, in order of authorship.
+        List of authors with nodeId, name, and hIndex, in order of hIndex.
         Empty list if paper not found or has no authors.
     """
     driver = driver_module.get_neo4j_driver()
@@ -43,32 +34,32 @@ def paper_authors(
             result = session.execute_read(
                 _paper_authors_tx,
                 paper_node_id,
-                return_properties
             )
             return result
     except Exception as e:
         return [{"error": str(e), "message": "Failed to retrieve paper authors"}]
 
 
-def _paper_authors_tx(tx, paper_node_id: str, return_properties: List[str]):
+def _paper_authors_tx(tx, paper_node_id: str):
     """Transaction function for paper_authors traversal."""
-    return_items = (
-        ["author.nodeId AS nodeId"]
-        + [f"author.{prop} AS {prop}" for prop in return_properties]
-    )
-    return_clause = ", ".join(return_items)
-
-    query = f"""
-    MATCH (paper:Paper {{nodeId: $paper_node_id}})-[:HAS_AUTHOR]->(author:Author)
-    RETURN {return_clause}
+    query = """
+    MATCH (paper:Paper {nodeId: $paper_node_id})-[:HAS_AUTHOR]->(author:Author)
+    RETURN
+        author.nodeId AS nodeId,
+        author.name AS name,
+        author.hIndex AS hIndex
+    ORDER BY author.hIndex DESC
     """
 
     result = tx.run(query, paper_node_id=paper_node_id)
 
     records = []
     for record in result:
-        author_data = {"nodeId": record["nodeId"]}
-        author_data.update({prop: record[prop] for prop in return_properties})
+        author_data = {
+            "nodeId": record["nodeId"],
+            "name": record["name"],
+            "hIndex": record["hIndex"]
+        }
         records.append(author_data)
 
     return records

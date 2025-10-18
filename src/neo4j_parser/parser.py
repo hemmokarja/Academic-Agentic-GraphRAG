@@ -345,9 +345,12 @@ class RDFNeo4jParser:
         for node in author_nodes:
             uri = node["properties"]["uri"]
             if uri in uri_to_meta:
-                node["properties"]["name"] = uri_to_meta[uri]["name"]
+                meta = uri_to_meta[uri]
+                node["properties"]["name"] = meta["name"]
+                if "hIndex" in meta:
+                    node["properties"]["hIndex"] = meta["hIndex"]
 
-        logger.info("Enriched author nodes with names")
+        logger.info("Enriched author nodes with names and h-indices")
 
     def _enrich_paper_nodes(self, batch_size=10_000):
         logger.info("Starting to enrich paper nodes (this might take a while)...")

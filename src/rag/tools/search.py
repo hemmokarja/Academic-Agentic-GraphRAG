@@ -7,7 +7,7 @@ from rag import driver as driver_module
 
 VALID_PROPERTIES = {
     "Paper": ["title", "date", "citationCount", "abstract", "hasURL", "hasArXivId"],
-    "Author": ["name"],
+    "Author": ["name", "hIndex"],
     "Model": ["name", "numberPapers", "introducedYear"],
     "Dataset": ["name", "description", "numberPapers"],
     "Method": ["name", "description", "numberPapers", "introducedYear", "codeSnippet", "source"],
@@ -38,7 +38,7 @@ class FuzzySearchInput(BaseModel):
         description=(
             "Specific properties to return. Choose based on the node type."
             "Paper: title, date, citationCount, abstract, hasURL, hasArXivId | "
-            "Author: name | "
+            "Author: name, hIndex | "
             "Model: name, numberPapers | "
             "Dataset: name, description, numberPapers |"
             "Method: name, description, numberPapers, introducedYear, codeSnippet, source |"

@@ -24,8 +24,8 @@ class SemOpenAlexEnricher:
     """
     A utility for enriching author and paper data using the SemOpenAlex SPARQL endpoint.
 
-    Fetches metadata such as author names, publication years, and citation links in
-    batches.
+    Fetches metadata such as author names and h-indices, publication years, and
+    citation links in batches.
 
     Note:
         Falls back to an unverified SSL context if the SemOpenAlex SSL certificate has
@@ -63,14 +63,22 @@ class SemOpenAlexEnricher:
     def _query_author_metadata(self, author_uris):
         """Query full name for a batch of authors."""
         author_uris_string = _to_sparql_string(author_uris)
+
         query = f"""
         PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        SELECT ?author ?name
+        PREFIX bido: <http://purl.org/spar/bido/>
+
+        SELECT ?author ?name ?hIndex
         WHERE {{
             VALUES ?author {{
             {author_uris_string}
             }}
+
             ?author foaf:name ?name .
+
+            OPTIONAL {{
+                ?author <http://purl.org/spar/bido/h-index> ?hIndex .
+            }}
         }}
         """
 
@@ -82,6 +90,8 @@ class SemOpenAlexEnricher:
             author_uri = result["author"]["value"]
             name = result["name"]["value"]
             result_dict[author_uri] = {"name": name}
+            if "hIndex" in result:
+                result_dict[author_uri]["hIndex"] = result["hIndex"]["value"]
 
         return result_dict
     

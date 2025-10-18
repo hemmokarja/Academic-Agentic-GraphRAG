@@ -234,13 +234,12 @@ def _paper_citation_chain_tx(
     return_properties: List[str]
 ):
     """Transaction function for citation chain traversal."""
-    # Build the relationship pattern based on direction
     if direction == "forward":
-        rel_pattern = "<-[:CITES*1..{}]-".format(max_depth)
+        rel_pattern = f"<-[:CITES*1..{max_depth}]-"
     elif direction == "backward":
-        rel_pattern = "-[:CITES*1..{}]->".format(max_depth)
+        rel_pattern = f"-[:CITES*1..{max_depth}]->"
     else:  # both
-        rel_pattern = "-[:CITES*1..{}]-".format(max_depth)
+        rel_pattern = f"-[:CITES*1..{max_depth}]-"
 
     return_items = (
         ["related.nodeId AS nodeId"]
