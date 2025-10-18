@@ -5,13 +5,15 @@ from langchain_openai import ChatOpenAI
 
 from rag import driver
 from rag.agent import AgentConfig, ReActAgent
-from rag.tools import author_tools, citation_tools, method_tools, paper_tools, search_tools
+from rag.tools import (
+    author_tools, citation_tools, method_tools, paper_tools, search_tools
+)
 from ui import chat
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 atexit.register(driver.close_neo4j_driver)
 
@@ -45,7 +47,14 @@ def main():
     )
     agent = ReActAgent(llm=llm, tools=tools, config=config)
 
-    chat.chat(agent)
+    chat.chat(
+        agent,
+        page_title="🤖 Research Assistant Chat",
+        page_subtitle=(
+            "Ask me about ML papers, research trends, authors, or methods—I'll help "
+            "you explore!"
+        )
+    )
 
 
 if __name__ == "__main__":
