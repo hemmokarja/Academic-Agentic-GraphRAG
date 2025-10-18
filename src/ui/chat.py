@@ -13,6 +13,7 @@ DEFAULT_SUBTITLE = (
 def chat(
     agent,
     show_tool_results=False,
+    show_token_usage=True,
     page_title=DEFAULT_TITLE,
     page_subtitle=DEFAULT_SUBTITLE,
 ):
@@ -51,9 +52,11 @@ def chat(
             message_placeholder = st.empty()
             full_response = ""
 
-            handler = StreamHandler(show_tool_results)
+            handler = StreamHandler(
+                agent.llm.model_name, show_tool_results, show_token_usage
+            )
             config = {"configurable": {"thread_id": st.session_state.thread_id}}
-            
+
             # start with initial thinking message
             full_response = handler.get_thinking_message(iteration=1)
             message_placeholder.markdown(full_response)

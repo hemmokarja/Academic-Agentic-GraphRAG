@@ -52,11 +52,19 @@ class TimeoutError(Exception):
     pass
 
 
+class TokenUsage(TypedDict, total=False):
+    """Token usage statistics."""
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     iteration_count: int
     start_time: float
     errors: List[Dict[str, Any]]
+    token_usage: TokenUsage  # Track cumulative token usage
 
 
 class ReActAgent:
@@ -106,6 +114,31 @@ class ReActAgent:
         )
         
         return workflow.compile(checkpointer=self.checkpointer)
+
+    def _extract_token_usage(self, response: AIMessage) -> TokenUsage:
+        """Extract token usage from LLM response."""
+        meta = response.usage_metadata
+        usage = TokenUsage(
+            input_tokens=meta["input_tokens"],
+            output_tokens=meta["output_tokens"],
+            total_tokens=meta["total_tokens"],
+        )
+        logger.debug(
+            f"Token usage: input={usage['input_tokens']}, "
+            f"output={usage['output_tokens']}, total={usage['total_tokens']}"
+        )
+        return usage
+
+    def _update_token_usage(
+        self, 
+        current_usage: TokenUsage, 
+        new_usage: TokenUsage
+    ) -> TokenUsage:
+        return TokenUsage(
+            input_tokens=current_usage["input_tokens"] + new_usage["input_tokens"],
+            output_tokens=current_usage["output_tokens"] + new_usage["output_tokens"],
+            total_tokens=current_usage["total_tokens"] + new_usage["total_tokens"]
+        )
 
     def _generate_summary(self, messages: List[BaseMessage]) -> str:
         """Generate a summary of the conversation so far."""
@@ -168,6 +201,7 @@ class ReActAgent:
     def _agent_node(self, state: AgentState) -> Dict[str, Any]:
         messages = list(state["messages"])
         iteration = state.get("iteration_count", 0)
+        current_token_usage = state["token_usage"]
 
         if iteration >= self.config.max_iterations:
             return self._handle_agent_iter_overrun(messages, iteration)
@@ -188,6 +222,11 @@ class ReActAgent:
             logger.info(f"Agent reasoning (iteration {iteration + 1})...")
             response = self.llm_with_tools.invoke(messages)
 
+            new_token_usage = self._extract_token_usage(response)
+            updated_token_usage = self._update_token_usage(
+                current_token_usage, new_token_usage
+            )
+
             if hasattr(response, "tool_calls") and response.tool_calls:
                 logger.info(f"Agent planning to call {len(response.tool_calls)} tool(s)")
                 for tc in response.tool_calls:
@@ -195,7 +234,8 @@ class ReActAgent:
 
             return {
                 "messages": [response],
-                "iteration_count": iteration + 1
+                "iteration_count": iteration + 1,
+                "token_usage": updated_token_usage
             }
 
         except Exception as e:
@@ -222,7 +262,7 @@ class ReActAgent:
                 "iteration_count": iteration + 1,
                 "errors": [error_record]
             }
-    
+
     def _execute_tool_with_timeout(
         self, 
         tool: BaseTool, 
@@ -429,21 +469,27 @@ class ReActAgent:
             "messages": [HumanMessage(content=input_message)],
             "iteration_count": 0,
             "start_time": time.time(),
-            "errors": []
+            "errors": [],
+            "token_usage": TokenUsage(input_tokens=0, output_tokens=0, total_tokens=0)
         }
         try:
             final_state = self.graph.invoke(initial_state, config=config)
-            
+
             execution_time = time.time() - final_state["start_time"]
+            token_usage = final_state["token_usage"]
+
             logger.info(
                 f"Agent execution completed: "
                 f"iterations={final_state['iteration_count']}, "
                 f"time={execution_time:.2f}s, "
-                f"errors={len(final_state.get('errors', []))}"
+                f"errors={len(final_state['errors'])}, "
+                f"tokens=(input={token_usage['input_tokens']}, "
+                f"output={token_usage['output_tokens']}, "
+                f"total={token_usage['total_tokens']})"
             )
 
             return final_state
-            
+
         except Exception as e:
             logger.error(f"Agent execution failed: {e}", exc_info=True)
             raise
@@ -461,7 +507,8 @@ class ReActAgent:
             "messages": [HumanMessage(content=input_message)],
             "iteration_count": 0,
             "start_time": time.time(),
-            "errors": []
+            "errors": [],
+            "token_usage": TokenUsage(input_tokens=0, output_tokens=0, total_tokens=0)
         }
         try:
             for chunk in self.graph.stream(

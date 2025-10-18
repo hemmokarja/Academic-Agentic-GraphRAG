@@ -1,8 +1,23 @@
+import json
+
+
 class StreamHandler:
-    def __init__(self, show_tool_results=False):
-        self.last_iteration = 0
+    def __init__(
+        self,
+        model_name,
+        show_tool_results=False,
+        show_token_usage=True
+    ):
         self.show_tool_results = show_tool_results
+        self.show_token_usage = show_token_usage
+
+        self.last_iteration = 0
         self.pending_tool_calls = set()  # track pending tool calls
+
+        with open("src/ui/api_pricing.json", "r") as f:
+            model_to_pricing = json.loads(f.read())
+
+        self.pricing = model_to_pricing.get(model_name)
 
     def _format_agent_tool_calls(self, message):
 
@@ -34,10 +49,27 @@ class StreamHandler:
                 )
             return output
 
+    def _format_token_usage(self, token_usage):
+        input_tokens = token_usage["input_tokens"]
+        output_tokens = token_usage["output_tokens"]
+        total_tokens = token_usage["total_tokens"]
+
+        if self.pricing:
+            input_price = self.pricing["input"] * (input_tokens / 1e6)
+            output_price = self.pricing["output"] * (output_tokens / 1e6)
+            total_price = input_price + output_price
+
+        return (
+            f"\n---\n"
+            f"Token usage: {input_tokens:,} input + {output_tokens:,} output "
+            f"= {total_tokens:,} total (${total_price:.4f})\n"
+        )
+
     def _handle_agent_chunk(self, chunk):
         agent_data = chunk["agent"]
-        iteration = agent_data.get("iteration_count", 0)
-        messages = agent_data.get("messages", [])
+        iteration = agent_data["iteration_count"]
+        messages = agent_data["messages"]
+        token_usage = agent_data["token_usage"]
 
         if not messages:
             return ""
@@ -50,7 +82,10 @@ class StreamHandler:
             return self._format_agent_tool_calls(message)
 
         elif hasattr(message, "content") and message.content:
-            return f"💡 **Final Answer:**\n\n{message.content}\n"
+            output = f"💡 **Final Answer:**\n\n{message.content}\n"
+            if self.show_token_usage:
+                output += self._format_token_usage(token_usage)
+            return output
 
         else:
             raise RuntimeError(

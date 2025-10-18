@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 from rag import driver
 from rag.agent import AgentConfig, ReActAgent
 from rag.tools import (
-    author_tools, citation_tools, method_tools, paper_tools, search_tools
+    author_tools, citation_tools, method_tools, search_tools
 )
 from ui import chat
 
