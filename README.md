@@ -6,7 +6,9 @@ An autonomous research assistant that reasons over 1.6M scientific entities thro
 
 ## 🎯 Overview
 
-This is a learning project demonstrating AI engineering skills through the implementation of an intelligent agent capable of multi-step reasoning over a large-scale knowledge graph of ML/AI research. Unlike traditional RAG systems that operate on flat document collections, this system leverages the inherent graph structure of academic publications - papers, authors, citations, methods, and research areas - to answer complex queries that require graph traversal and relational reasoning.
+This is a learning project demonstrating AI engineering skills through the implementation of an **intelligent agent capable of multi-step reasoning over a large-scale knowledge graph of ML/AI research**. Unlike traditional RAG systems that operate on flat document collections, this system **leverages the inherent graph structure of academic publications** - papers, authors, citations, methods, and research areas - to answer complex queries that require graph traversal and relational reasoning.
+
+The system features an **interactive Streamlit interface that provides full transparency into the agent's decision-making process**. Users can observe in real-time as the agent decomposes complex queries into reasoning steps, selects appropriate tools, and constructs multi-hop graph traversals - making the "black box" of agentic reasoning visible and interpretable.
 
 ## 💡 What Can You Ask?
 
