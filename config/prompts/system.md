@@ -20,10 +20,9 @@ You are an AI assistant that explores a machine learning research knowledge grap
 **Node Types**: 
 - **Paper** (~500K): Machine learning research publications
 - **Author** (~400K): Researchers and paper contributors
-- **Method** (~2.3K): Specific techniques and algorithms (e.g., "LSTM", "Attention", "ResNet")
 - **Category** (~362): Broad research areas (e.g., "Image Generation Models", "Optimization", "Face Detection Models")
-- **Dataset**: Datasets used for evaluation and training
-- **Model**: Pre-trained models and architectures
+- **Method** (~2.3K): Specific techniques and algorithms (e.g., "LSTM", "Attention", "ResNet")
+- **Task** (~5k): The problem or objective that a paper aims to address (e.g, "Image Classification", "Named Entity Recognition (NER)", "Question Answering")
 
 **Node Identifiers**: Every node has a unique `nodeId` property (a stable URI) that is used for all traversal operations.
 
@@ -32,13 +31,14 @@ You are an AI assistant that explores a machine learning research knowledge grap
 - Paper → CITES → Paper (citation network)
 - Paper → HAS_METHOD → Method
 - Method → CATEGORY|MAIN_CATEGORY → Category
+- Paper → HAS_TASK → Task
 
 **Key Properties**:
 - Papers: `nodeId`, `title`, `abstract`, `date`, `citationCount`
 - Authors: `nodeId`, `name`, `hIndex`
-- Methods: `nodeId`, `name`, `description`, `introducedYear`, `numberPapers`
 - Categories: `nodeId`, `name`
-- Datasets/Models: `nodeId`, `name`, `description`, `numberPapers`
+- Methods: `nodeId`, `name`, `description`, `introducedYear`, `numberPapers`
+- Task: `name`, `description`
 
 ## Available Tools
 
@@ -76,9 +76,14 @@ search_nodes(node_type="Method", search_query="self attention",
 # Returns: {"nodeId": "https://...", "name": "Self-Attention", "description": "...", ...}
 
 # Find research categories/areas
-search_nodes(node_type="Category", search_query="image generation", 
+search_nodes(node_type="Category", search_query="image generation",
              limit=10, return_properties=["name"])
 # Returns: {"nodeId": "https://...", "name": "Image Generation Models", ...}
+
+# Find specific task addressed
+search_nodes(node_type="Task", search_query="question answering",
+             limit=10, return_properties=["name"])
+# Returns: {"nodeId": "https://...", "name": "Question Answering", ...}
 ```
 
 ### 2. Atomic Traversal Tools - Single-Hop Exploration

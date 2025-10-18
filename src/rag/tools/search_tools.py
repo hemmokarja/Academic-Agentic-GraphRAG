@@ -8,16 +8,15 @@ from rag import driver as driver_module
 VALID_PROPERTIES = {
     "Paper": ["title", "date", "citationCount", "abstract", "hasURL", "hasArXivId"],
     "Author": ["name", "hIndex"],
-    "Model": ["name", "numberPapers", "introducedYear"],
-    "Dataset": ["name", "description", "numberPapers"],
-    "Method": ["name", "description", "numberPapers", "introducedYear", "codeSnippet", "source"],
     "Category": ["name"],
+    "Method": ["name", "description", "numberPapers", "introducedYear", "codeSnippet", "source"],
+    "Task": ["name", "description"],
 }
 
 
 class FuzzySearchInput(BaseModel):
     """Input schema for fuzzy searching nodes in the knowledge graph."""
-    node_type: Literal["Paper", "Author", "Model", "Dataset", "Category", "Method"] = Field(
+    node_type: Literal["Paper", "Author", "Category", "Method", "Task"] = Field(
         description="The type of node to search for"
     )
     search_query: str = Field(
@@ -39,10 +38,9 @@ class FuzzySearchInput(BaseModel):
             "Specific properties to return. Choose based on the node type."
             "Paper: title, date, citationCount, abstract, hasURL, hasArXivId | "
             "Author: name, hIndex | "
-            "Model: name, numberPapers | "
-            "Dataset: name, description, numberPapers |"
+            "Category: name | "
             "Method: name, description, numberPapers, introducedYear, codeSnippet, source |"
-            "Category: name."
+            "Task: name, description."
         ),
         examples=[
             ["name", "description"],
@@ -126,10 +124,9 @@ def _search_nodes_tx(
     index_map = {
         "Paper": "paper_title_search",
         "Author": "author_search",
-        "Model": "model_search",
-        "Dataset": "dataset_search",
         "Category": "category_search",
         "Method": "method_search",
+        "Task": "task_search",
     }
 
     index_name = index_map.get(node_type)

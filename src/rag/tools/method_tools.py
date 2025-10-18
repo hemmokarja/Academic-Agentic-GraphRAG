@@ -589,3 +589,174 @@ def _method_categories_tx(
         records.append(category_data)
 
     return records
+
+
+class TaskPapersInput(PaperQueryParamsWithDates):
+    """Input schema for finding papers that address a specific task."""
+    task_node_id: str = Field(
+        description=(
+            "Unique node identifier (nodeId) for the task, as returned by search_nodes. "
+            "This is the stable URI identifier for the task node."
+        )
+    )
+
+
+@tool(args_schema=TaskPapersInput)
+def task_papers(
+    task_node_id: str,
+    limit: int,
+    return_properties: List[str],
+    order_by: Optional[str] = "date_desc",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Find all papers that address a specific task.
+
+    Traversal pattern: Task <- HAS_TASK <- Paper
+
+    Use this when you need to:
+    - Find papers working on a specific problem (e.g., "Image Classification", "Machine Translation")
+    - Explore solutions for a task
+    - Track progress on a task over time
+
+    Returns:
+        List of papers with nodeId, requested properties, ordered by date or citation count.
+        Empty list if task not found or has no papers.
+    """
+    driver = driver_module.get_neo4j_driver()
+    try:
+        with driver.session() as session:
+            result = session.execute_read(
+                _task_papers_tx,
+                task_node_id,
+                limit,
+                return_properties,
+                order_by,
+                date_from,
+                date_to,
+            )
+            return result
+    except Exception as e:
+        return [{"error": str(e), "message": "Failed to retrieve task papers"}]
+
+
+def _task_papers_tx(
+    tx,
+    task_node_id: str,
+    limit: int,
+    return_properties: List[str],
+    order_by: Optional[str] = "date_desc",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    params = {
+        "task_node_id": task_node_id,
+        "limit": limit,
+    }
+
+    return_items = (
+        ["paper.nodeId AS nodeId"]
+        + [f"paper.{prop} AS {prop}" for prop in return_properties]
+    )
+    return_clause = ", ".join(return_items)
+
+    where_conditions = ["task.nodeId = $task_node_id"]
+    if date_from:
+        where_conditions.append("paper.date >= $date_from")
+        params["date_from"] = date_from
+    if date_to:
+        where_conditions.append("paper.date <= $date_to")
+        params["date_to"] = date_to
+
+    where_clause = "WHERE " + " AND ".join(where_conditions)
+
+    if order_by == "date_desc":
+        order_clause = "paper.date DESC"
+    elif order_by == "date_asc":
+        order_clause = "paper.date ASC"
+    else:
+        order_clause = "paper.citationCount DESC"
+
+    query = f"""
+    MATCH (task:Task)<-[:HAS_TASK]-(paper:Paper)
+    {where_clause}
+    RETURN {return_clause}
+    ORDER BY {order_clause}
+    LIMIT $limit
+    """
+
+    result = tx.run(query, **params)
+
+    records = []
+    for record in result:
+        paper_data = {"nodeId": record["nodeId"]}
+        paper_data.update({prop: record[prop] for prop in return_properties})
+        records.append(paper_data)
+
+    return records
+
+
+class PaperTasksInput(BaseModel):
+    """Input schema for finding tasks addressed in a paper."""
+    paper_node_id: str = shared_models.PAPER_NODE_ID
+    return_properties: List[str] = Field(
+        default=["name", "description"],
+        description="Properties to return for each task. Available: name, description"
+    )
+
+
+@tool(args_schema=PaperTasksInput)
+def paper_tasks(
+    paper_node_id: str,
+    return_properties: List[str]
+) -> List[Dict[str, Any]]:
+    """
+    Find all tasks addressed in a specific paper.
+
+    Traversal pattern: Paper -> HAS_TASK -> Task
+
+    Use this when you need to:
+    - Identify problems addressed in a paper
+    - Compare tasks across papers
+    - Understand the application domain of a paper
+
+    Returns:
+        List of tasks with nodeId and requested properties.
+        Empty list if paper not found or has no tasks.
+    """
+    driver = driver_module.get_neo4j_driver()
+    try:
+        with driver.session() as session:
+            result = session.execute_read(
+                _paper_tasks_tx,
+                paper_node_id,
+                return_properties
+            )
+            return result
+    except Exception as e:
+        return [{"error": str(e), "message": "Failed to retrieve paper tasks"}]
+
+
+def _paper_tasks_tx(tx, paper_node_id: str, return_properties: List[str]):
+    """Transaction function for paper_tasks traversal."""
+    return_items = (
+        ["task.nodeId AS nodeId"]
+        + [f"task.{prop} AS {prop}" for prop in return_properties]
+    )
+    return_clause = ", ".join(return_items)
+
+    query = f"""
+    MATCH (paper:Paper {{nodeId: $paper_node_id}})-[:HAS_TASK]->(task:Task)
+    RETURN {return_clause}
+    """
+
+    result = tx.run(query, paper_node_id=paper_node_id)
+
+    records = []
+    for record in result:
+        task_data = {"nodeId": record["nodeId"]}
+        task_data.update({prop: record[prop] for prop in return_properties})
+        records.append(task_data)
+
+    return records
