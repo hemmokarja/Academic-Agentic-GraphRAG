@@ -160,13 +160,15 @@ export OPENAI_API_KEY=<your_api_key_here>
 make chat
 ```
 
-This launches the Streamlit UI where you can interact with the agent and query the knowledge graph.
+Launches the Streamlit UI where you can interact with the agent and query the knowledge graph.
 
 ### Stop the System
 
 ```bash
 make stop
 ```
+
+Stops and removes the Neo4j Docker container. The database data remains persisted on disk and can be reused in future sessions through volume mounts.
 
 ### Restart the Container
 
