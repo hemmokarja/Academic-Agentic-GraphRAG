@@ -452,10 +452,6 @@ def _category_methods_tx(
 class MethodCategoriesInput(BaseModel):
     """Input schema for finding research categories where a method is used."""
     method_node_id: str = METHOD_NODE_ID
-    return_properties: List[str] = Field(
-        default=["name"],
-        description="Properties to return for each category. Available: name"
-    )
     limit: int = Field(
         default=50,
         ge=1,
@@ -474,7 +470,6 @@ class MethodCategoriesInput(BaseModel):
 @tool(args_schema=MethodCategoriesInput)
 def method_categories(
     method_node_id: str,
-    return_properties: List[str],
     limit: int,
     min_papers: int = 1,
     date_from: Optional[str] = None,
@@ -493,7 +488,7 @@ def method_categories(
     - Understand the reach of a method across fields
 
     Returns:
-        List of categories with nodeId, requested properties, and papers_in_category
+        List of categories with nodeId, name, and papers_in_category
         (number of papers in that category using the method, respecting date filters).
         Ordered by papers_in_category descending (most used categories first).
         Empty list if method not found or has no categories meeting criteria.
@@ -504,7 +499,6 @@ def method_categories(
             result = session.execute_read(
                 _method_categories_tx,
                 method_node_id,
-                return_properties,
                 limit,
                 min_papers,
                 date_from,
@@ -530,23 +524,14 @@ def _method_categories_tx(
         "min_papers": min_papers,
     }
 
-    return_items = (
-        ["category.nodeId AS nodeId"]
-        + [f"category.{prop} AS {prop}" for prop in return_properties]
-        + ["papers_in_category"]
-    )
-    return_clause = ", ".join(return_items)
-
     where_conditions = ["method.nodeId = $method_node_id"]
-    
     if date_from:
         where_conditions.append("paper.date >= $date_from")
         params["date_from"] = date_from
-    
     if date_to:
         where_conditions.append("paper.date <= $date_to")
         params["date_to"] = date_to
-    
+
     where_clause = "WHERE " + " AND ".join(where_conditions)
 
     # Note: Counting papers per category for a given method contains a subtlety due to
@@ -574,7 +559,10 @@ def _method_categories_tx(
     {where_clause}
     WITH category, COUNT(DISTINCT paper) AS papers_in_category
     WHERE papers_in_category >= $min_papers
-    RETURN {return_clause}
+    RETURN 
+        category.nodeId AS nodeId,
+        category.name AS name,
+        papers_in_category
     ORDER BY papers_in_category DESC, category.name ASC
     LIMIT $limit
     """
