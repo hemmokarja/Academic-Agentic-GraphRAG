@@ -17,13 +17,15 @@ logging.basicConfig(
 )
 atexit.register(driver.close_neo4j_driver)
 
+MODEL_NAME = "claude-haiku-4-5"
+
 
 def main():
 
-    with open("config/prompts/system.md", "r") as f:
+    with open(f"config/system_prompts/{MODEL_NAME}.md", "r") as f:
         system_message = f.read()
 
-    llm = ChatAnthropic(model="claude-haiku-4-5")
+    llm = ChatAnthropic(model=MODEL_NAME)
     tools = [
         search_tools.search_nodes,
         author_tools.author_papers,
@@ -45,7 +47,8 @@ def main():
         max_execution_time=360.0,
         tool_execution_timeout=60.0,
         max_tool_retries=2,
-        system_message=system_message
+        system_message=system_message,
+        langgraph_recursion_limit=100,
     )
     agent = ReActAgent(llm=llm, tools=tools, config=config)
 

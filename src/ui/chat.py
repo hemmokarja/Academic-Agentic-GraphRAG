@@ -82,13 +82,14 @@ def chat(
             full_response = ""
 
             handler = StreamHandler(agent.model_name)
-
-            config = {"configurable": {"thread_id": st.session_state.thread_id}}
             
             # start with initial thinking message
             full_response = handler.get_thinking_message(iteration=1)
             message_placeholder.markdown(full_response, unsafe_allow_html=True)
 
+            config = {
+                "configurable": {"thread_id": st.session_state.thread_id},
+            }
             for chunk in st.session_state.agent.stream(
                 prompt, config=config, stream_mode="updates"
             ):

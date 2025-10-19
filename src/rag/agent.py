@@ -45,6 +45,15 @@ class AgentConfig(BaseModel):
         default=4,
         description="Maximum number of worker threads for tool execution"
     )
+    langgraph_recursion_limit: int = Field(
+        default=25,
+        description=(
+            "Maximum depth of recursive graph traversal in LangGraph. "
+            "If this limit is reached without hitting a stop condition, "
+            "a GraphRecursionError is raised. Increase to allow deeper "
+            "reasoning through graph nodes, or reduce to prevent infinite loops."
+        )
+    )
 
 
 class TimeoutError(Exception):
@@ -540,6 +549,10 @@ class ReActAgent:
             "errors": [],
             "token_usage": TokenUsage(input_tokens=0, output_tokens=0, total_tokens=0)
         }
+
+        config = config or {}
+        config["recursion_limit"] = self.config.langgraph_recursion_limit
+
         try:
             for chunk in self.graph.stream(
                 initial_state, config=config, stream_mode=stream_mode
