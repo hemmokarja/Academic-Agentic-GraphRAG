@@ -76,8 +76,8 @@ stop:
 	fi
 
 chat:
-	@if [ -z "$$OPENAI_API_KEY" ]; then \
-		echo "Error: OPENAI_API_KEY is not set. Please export it first: export OPENAI_API_KEY=your_api_key"; \
+	@if [ -z "$$ANTHROPIC_API_KEY" ]; then \
+		echo "Error: ANTHROPIC_API_KEY is not set. Please export it first: export ANTHROPIC_API_KEY=your_api_key"; \
 		exit 1; \
 	fi
 	@NEO4J_URI=bolt://localhost:$(BOLT_PORT) uv run streamlit run src/ui/main.py

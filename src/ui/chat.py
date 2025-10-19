@@ -81,7 +81,7 @@ def chat(
             message_placeholder = st.empty()
             full_response = ""
 
-            handler = StreamHandler(agent.llm.model_name)
+            handler = StreamHandler(agent.model_name)
 
             config = {"configurable": {"thread_id": st.session_state.thread_id}}
             

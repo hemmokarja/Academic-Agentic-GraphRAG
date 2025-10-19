@@ -19,6 +19,25 @@ def _extract_tool_details(tool_call):
     return tool_id, tool_name, tool_args
 
 
+def _extract_text_from_content(content):
+    """
+    Extract text content from message.content (handles both string and list formats).
+    """
+    if isinstance(content, str):
+        return content.strip()
+
+    if isinstance(content, list):
+        text_parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                text_parts.append(block.get('text', ''))
+            elif isinstance(block, str):
+                text_parts.append(block)
+        return " ".join(text_parts).strip()
+
+    return ""
+
+
 class StreamHandler:
     def __init__(self, model_name):
         self.last_iteration = 0
@@ -43,12 +62,29 @@ class StreamHandler:
             f"<code>{json_str}</code></pre>"
         )
 
+    def _format_reasoning(self, reasoning_text):
+        escaped_text = _escape_string(reasoning_text)
+        return (
+            f"<div class='react-block'>"
+            f"<div class='font-sm text-secondary'>Reasoning</div>"
+            f"<div class='font-md text-secondary mt-2' style='line-height: 1.6;'>{escaped_text}</div>"
+            f"</div><hr class='react-hr'>"
+        )
+
     def _format_single_tool_call(self, message):
+        # Extract any reasoning text from content
+        reasoning_text = _extract_text_from_content(message.content)
+        if reasoning_text:
+            reasoning_output = self._format_reasoning(reasoning_text)
+        else:
+            reasoning_output = ""
+
         tool_call = message.tool_calls[0]
         tool_id, tool_name, tool_args = _extract_tool_details(tool_call)
         self.pending_tool_calls.add(tool_id)
         formatted_tool_args = self._format_json(tool_args)
         return (
+            f"{reasoning_output}"
             f"<div class='react-block'>"
             f"<div class='font-sm text-secondary'>Tool Call</div>"
             f"<div class='font-md text-primary mt-2'><code>{tool_name}</code></div>"
@@ -59,7 +95,12 @@ class StreamHandler:
         )
 
     def _format_multiple_tool_calls(self, message):
+        # Extract any reasoning text from content
+        reasoning_text = _extract_text_from_content(message.content)
+        reasoning_output = self._format_reasoning(reasoning_text)
+
         output = (
+            f"{reasoning_output}"
             f"<div class='react-block'>"
             f"<div class='font-sm text-secondary mb-3'>"
             f"Calling {len(message.tool_calls)} Tools</div>"
@@ -106,10 +147,13 @@ class StreamHandler:
 
     def _format_final_answer(self, message, token_usage):
         elapsed = time.time() - self.start_time
+        content_text = _extract_text_from_content(message.content)
+        escaped_content = _escape_string(content_text)
+
         output = (
             f"<div class='react-block'>"
             f"<div class='font-lg text-secondary mb-3'>💡 Final Answer</div>"
-            f"<div class='font-lg text-primary' style='line-height: 1.6;'>{message.content}</div>"
+            f"<div class='font-lg text-primary' style='line-height: 1.6;'>{escaped_content}</div>"
             f"</div>"
         )
         output += self._format_token_usage(token_usage, elapsed)

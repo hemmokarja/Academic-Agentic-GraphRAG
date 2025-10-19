@@ -67,6 +67,14 @@ class AgentState(TypedDict):
     token_usage: TokenUsage  # Track cumulative token usage
 
 
+def _get_model_name(llm):
+    if hasattr(llm, "model"):
+        return llm.model
+    elif hasattr(llm, "model_name"):
+        return llm.model_name
+    raise RuntimeError("llm expected to have model or model_name attribute")
+
+
 class ReActAgent:
     def __init__(
         self,
@@ -88,7 +96,12 @@ class ReActAgent:
 
         self.graph = self._build_graph()
 
-        logger.info(f"ReAct agent initialized with {len(tools)} tools")
+        self.model_name = _get_model_name(self.llm)
+
+        logger.info(
+            f"ReAct agent initialized with model {self.model_name} and "
+            f"{len(tools)} tools"
+        )
     
     def __del__(self):
         # cleanup thread pool on deletion
@@ -140,8 +153,11 @@ class ReActAgent:
             total_tokens=current_usage["total_tokens"] + new_usage["total_tokens"]
         )
 
-    def _generate_summary(self, messages: List[BaseMessage]) -> str:
-        """Generate a summary of the conversation so far."""
+    def _generate_summary(self, messages: List[BaseMessage]) -> tuple[str, TokenUsage]:
+        """
+        Generate a summary of the conversation so far.
+        Used when agent has exhausted its maximum iteration or time limits.
+        """
         prompt = HumanMessage(
             content=(
                 "Summarize the conversation. Focus on the main facts, any "
@@ -154,19 +170,25 @@ class ReActAgent:
         messages_with_prompt = messages + [prompt]
         try:
             resp = self.llm.invoke(messages_with_prompt)
-            return resp.content.strip()
+            summary = resp.content.strip()
+            token_usage = self._extract_token_usage(resp)
+            return summary, token_usage
         except Exception as e:
             logger.warning(f"Summary generation failed: {e}")
-            return "I couldn't produce a summary due to an error."
-
+            empty_usage = TokenUsage(input_tokens=0, output_tokens=0, total_tokens=0)
+            return "I couldn't produce a summary due to an error.", empty_usage
 
     def _handle_agent_iter_overrun(
         self,
         messages: List[BaseMessage],
         iteration: int,
+        current_token_usage: TokenUsage,
     ) -> Dict[str, Any]:
         logger.warning(f"Max iterations ({self.config.max_iterations}) reached")
-        summary = self._generate_summary(messages)
+        summary, summary_usage = self._generate_summary(messages)
+        updated_token_usage = self._update_token_usage(
+            current_token_usage, summary_usage
+        )
         message = AIMessage(
             content=(
                 f"I've reached the maximum number of reasoning steps "
@@ -175,18 +197,23 @@ class ReActAgent:
         )
         return {
             "messages": [message],
-            "iteration_count": iteration + 1
+            "iteration_count": iteration + 1,
+            "token_usage": updated_token_usage
         }
 
     def _handle_agent_timeout(
         self,
         messages: List[BaseMessage],
         iteration: int,
+        current_token_usage: TokenUsage,
     ) -> Dict[str, Any]:
         logger.warning(
             f"Max execution time ({self.config.max_execution_time}s) exceeded"
         )
-        summary = self._generate_summary(messages)
+        summary, summary_usage = self._generate_summary(messages)
+        updated_token_usage = self._update_token_usage(
+            current_token_usage, summary_usage
+        )
         message = AIMessage(
             content=(
                 f"I've reached the time limit for this query. "
@@ -195,7 +222,8 @@ class ReActAgent:
         )
         return {
             "messages": [message],
-            "iteration_count": iteration + 1
+            "iteration_count": iteration + 1,
+            "token_usage": updated_token_usage
         }
 
     def _agent_node(self, state: AgentState) -> Dict[str, Any]:
@@ -204,11 +232,13 @@ class ReActAgent:
         current_token_usage = state["token_usage"]
 
         if iteration >= self.config.max_iterations:
-            return self._handle_agent_iter_overrun(messages, iteration)
+            return self._handle_agent_iter_overrun(
+                messages, iteration, current_token_usage
+            )
 
         elapsed = time.time() - state.get("start_time", time.time())
         if elapsed > self.config.max_execution_time:
-            return self._handle_agent_timeout(messages, iteration)
+            return self._handle_agent_timeout(messages, iteration, current_token_usage)
 
         # add system message on first iteration if configured
         if self.config.system_message and iteration == 0:
