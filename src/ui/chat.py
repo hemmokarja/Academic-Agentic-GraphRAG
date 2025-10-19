@@ -27,16 +27,15 @@ def _render_sidebar():
 
         st.markdown("---")
 
+        st.header("ℹ️ About")
+
+        st.markdown(f"**Model:** `{st.session_state.agent.model_name}`")
+
         tools = st.session_state.agent.tools
         tool_names_list = "\n".join([f"- `{t.name}`" for t in tools])
         
-        st.header("🛠️ Tools")
+        st.markdown("**Tools**")
         st.markdown(tool_names_list)
-
-        st.markdown("---")
-        
-        st.header("ℹ️ About")
-        st.markdown("This ReAct agent uses reasoning and tool execution to solve complex problems.")
 
 
 def chat(

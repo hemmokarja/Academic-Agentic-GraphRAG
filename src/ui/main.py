@@ -1,14 +1,13 @@
 import atexit
+import os
 import logging
-
-from langchain_anthropic import ChatAnthropic
 
 from rag import driver
 from rag.agent import AgentConfig, ReActAgent
 from rag.tools import (
     author_tools, citation_tools, method_tools, search_tools
 )
-from ui import chat
+from ui import chat, util
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -17,15 +16,11 @@ logging.basicConfig(
 )
 atexit.register(driver.close_neo4j_driver)
 
-MODEL_NAME = "claude-haiku-4-5"
-
 
 def main():
-
-    with open(f"config/system_prompts/{MODEL_NAME}.md", "r") as f:
-        system_message = f.read()
-
-    llm = ChatAnthropic(model=MODEL_NAME)
+    model_name = os.getenv("MODEL_NAME", "gpt-4.1")
+    system_message = util.get_system_message(model_name)
+    llm = util.get_llm(model_name)
     tools = [
         search_tools.search_nodes,
         author_tools.author_papers,
@@ -44,7 +39,7 @@ def main():
     ]
     config = AgentConfig(
         max_iterations=20,
-        max_execution_time=360.0,
+        max_execution_time=1200.0,  # 20 min
         tool_execution_timeout=60.0,
         max_tool_retries=2,
         system_message=system_message,

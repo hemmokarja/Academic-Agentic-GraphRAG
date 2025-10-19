@@ -16,8 +16,10 @@ MIRROR_BASE_URL=https://zenodo.org/records/13881433/files
 TTL_FILENAME=linkedpaperswithcode_2024-09-05.ttl
 OWL_FILENAME=linkedpaperswithcode-ontology.owl
 
+MODEL_NAME=gpt-4.1
+
 export RAW_DATA_DIR DATA_DIR IMPORT_DIR MIRROR_BASE_URL TTL_FILENAME OWL_FILENAME
-export CONTAINER_NAME NEO4J_PASSWORD NEO4J_DB
+export CONTAINER_NAME NEO4J_PASSWORD NEO4J_DB MODEL_NAME
 
 .PHONY: setup start setup-files parse-files pull import-neo4j run-neo4j create-indexes stop chat clean
 
@@ -76,10 +78,6 @@ stop:
 	fi
 
 chat:
-	@if [ -z "$$ANTHROPIC_API_KEY" ]; then \
-		echo "Error: ANTHROPIC_API_KEY is not set. Please export it first: export ANTHROPIC_API_KEY=your_api_key"; \
-		exit 1; \
-	fi
 	@NEO4J_URI=bolt://localhost:$(BOLT_PORT) uv run streamlit run src/ui/main.py
 
 clean: stop

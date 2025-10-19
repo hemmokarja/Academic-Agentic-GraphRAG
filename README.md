@@ -8,7 +8,7 @@ An autonomous research assistant that reasons over 1.6M scientific entities thro
 
 This is a learning project demonstrating AI engineering skills through the implementation of an **intelligent agent capable of multi-step reasoning over a large-scale knowledge graph of ML/AI research**. Unlike traditional RAG systems that operate on flat document collections, this system **leverages the inherent graph structure of academic publications** - papers, authors, citations, methods, and research areas - to answer complex queries that require graph traversal and relational reasoning.
 
-The system features an **interactive Streamlit interface that provides full transparency into the agent's decision-making process**. Users can observe in real-time as the agent decomposes complex queries into reasoning steps, selects appropriate tools, and constructs multi-hop graph traversals - making the "black box" of agentic reasoning visible and interpretable.
+The system features an **interactive Streamlit interface that provides full transparency into the agent's decision-making process**. Users can observe in real-time as the agent decomposes complex queries into reasoning steps, selects appropriate tools, and constructs multi-hop graph traversals, making the "black box" of agentic reasoning visible and interpretable.
 
 ## 💡 What Can You Ask?
 
@@ -118,7 +118,7 @@ The agent has access to specialized tools for exploring the knowledge graph:
 - `uv` package manager
 - Make (for Makefile)
 - Neo4j Desktop (recommended but not required)
-- Anthropic API key
+- OpenAI API or Anthropic API key
 
 **System Requirements**: Parsing LPWC RDF files is resource-intensive. A machine with **>25GB RAM** is recommended.
 
@@ -160,11 +160,13 @@ This command performs the complete pipeline:
 ### Start Chatting
 
 ```bash
-export ANTHROPIC_API_KEY=<your_api_key_here>
+export OPENAI_API_KEY=<your_api_key_here>
 make chat
 ```
 
 Launches the Streamlit UI where you can interact with the agent and query the knowledge graph.
+
+**Note:** By default, `gpt-4.1` is used. Model can be configured in the `Makefile`. Anthropic models are also supported - set `ANTHROPIC_API_KEY` to use them.
 
 ### Stop the System
 
@@ -211,7 +213,6 @@ Use this procedure to establish a **Remote Connection** in Neo4j Desktop to manu
 
 - **Data Completeness**: Neither LPWC nor SemOpenAlex are perfect. Some authors, papers, or citation relationships may be missing or incomplete.
 - **Data Freshness**: LPWC is updated infrequently. The latest RDF dump (as of this project) is from **2024-09-06**. Research published after this date will not be present in the knowledge graph.
-- **LLM Provider**: Currently supports Anthropic models only.
 
 ## 🎓 Learning Outcomes
 
