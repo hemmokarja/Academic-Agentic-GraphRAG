@@ -86,6 +86,16 @@ def chat(
     
     # sidebar with info
     with st.sidebar:
+        
+        st.markdown(f"**Thread ID:** `{st.session_state.thread_id[:8]}...`")
+        
+        if st.button("🔄 New Conversation"):
+            st.session_state.thread_id = str(uuid.uuid4())
+            st.session_state.messages = []
+            st.rerun()
+
+        st.markdown("---")
+
         tools = st.session_state.agent.tools
         tool_names_list = "\n".join([f"- `{t.name}`" for t in tools])
 
@@ -95,13 +105,5 @@ This is a ReAct agent with the following tools:
 
 {tool_names_list}
 
-The agent uses reasoning and tool calls to solve your problems!
+The agent uses reasoning and tool calls to solve your problems.
         """)
-
-        st.markdown("---")
-        st.markdown(f"**Thread ID:** `{st.session_state.thread_id[:8]}...`")
-        
-        if st.button("🔄 New Conversation"):
-            st.session_state.thread_id = str(uuid.uuid4())
-            st.session_state.messages = []
-            st.rerun()

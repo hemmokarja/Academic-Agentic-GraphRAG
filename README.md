@@ -20,7 +20,7 @@ The system features an **interactive Streamlit interface that provides full tran
 - "What other papers have the authors of BERT published?"
 - "Trace the lineage from ResNet to modern vision transformers?"
 - "Who are the most prolific collaborators in self-supervised learning?"
-- "What are the most notable recent developments in the Reinforcement Learning literature?"
+- "What are the most notable recent developments in the Q-Learning literature?"
 
 The agent autonomously breaks these down into graph traversal strategies by chaining appropriate tool calls.
 
