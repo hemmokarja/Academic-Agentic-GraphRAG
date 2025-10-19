@@ -112,31 +112,32 @@ class StreamHandler:
             f"{elapsed:.2f}s</div>"
         )
 
+    def _format_final_answer(self, message, token_usage):
+        elapsed = time.time() - self.start_time
+        output = (
+            f"<div class='react-block'>"
+            f"<div style='font-size: 16px; color: #6b7280; margin-bottom: 10px;'>💡 Final Answer</div>"
+            f"<div style='font-size: 16px; color: #111827; line-height: 1.6;'>{message.content}</div>"
+            f"</div>"
+        )
+        output += self._format_token_usage(token_usage, elapsed)
+        return output
+
     def _handle_agent_chunk(self, chunk):
         agent_data = chunk["agent"]
-        iteration = agent_data["iteration_count"]
         messages = agent_data["messages"]
-        token_usage = agent_data["token_usage"]
 
         if not messages:
             return ""
 
-        self.last_iteration = iteration
+        self.last_iteration = agent_data["iteration_count"]
         message = messages[0]
 
         if hasattr(message, "tool_calls") and message.tool_calls:
             return self._format_agent_tool_calls(message)
 
         elif hasattr(message, "content") and message.content:
-            elapsed = time.time() - self.start_time
-            output = (
-                f"<div class='react-block'>"
-                f"<div style='font-size: 16px; color: #6b7280; margin-bottom: 10px;'>💡 Final Answer</div>"
-                f"<div style='font-size: 16px; color: #111827; line-height: 1.6;'>{message.content}</div>"
-                f"</div>"
-            )
-            output += self._format_token_usage(token_usage, elapsed)
-            return output
+            return self._format_final_answer(message, agent_data["token_usage"])
 
         raise RuntimeError("Agent message missing tool_calls and content")
 
