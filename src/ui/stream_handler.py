@@ -3,6 +3,22 @@ import json
 import time
 
 
+def _escape_string(string):
+    return (
+        string
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _extract_tool_details(tool_call):
+    tool_id = tool_call.get("id", "unknown")
+    tool_name = tool_call.get("name", "unknown")
+    tool_args = tool_call.get("args", {})
+    return tool_id, tool_name, tool_args
+
+
 class StreamHandler:
     def __init__(self, model_name):
         self.last_iteration = 0
@@ -14,39 +30,49 @@ class StreamHandler:
 
         self.pricing = model_to_pricing.get(model_name)
 
-    def _format_agent_tool_calls(self, message):
+    def _format_json(self, data, wrap=False):
+        if isinstance(data, (dict, list)):
+            json_str = json.dumps(data, indent=2)
+        else:
+            json_str = str(data)
 
-        def _extract_details(tool_call):
-            tool_id = tool_call.get("id", "unknown")
-            tool_name = tool_call.get("name", "unknown")
-            tool_args = tool_call.get("args", {})
-            return tool_id, tool_name, tool_args
+        json_str = _escape_string(json_str)
+        
+        # wrap long strings
+        wrap_style = "white-space: pre-wrap; word-wrap: break-word;" if wrap else ""
 
-        # single tool call
-        if len(message.tool_calls) == 1:
-            tool_call = message.tool_calls[0]
-            tool_id, tool_name, tool_args = _extract_details(tool_call)
-            self.pending_tool_calls.add(tool_id)
-            formatted_tool_args = self._format_json(tool_args)
-            return (
-                f"<div class='react-block'>"
-                f"<div style='font-size: 13px; color: #6b7280;'>Tool Call</div>"
-                f"<div style='font-size: 14px; color: #111827; margin-top: 6px;'>"
-                f"<code>{tool_name}</code></div>"
-                f"<div style='font-size: 12px; color: #9ca3af; margin: 4px 0 8px 0;'>{tool_id}</div>"
-                f"<div style='font-size: 13px; color: #6b7280; margin-bottom: 4px;'>Arguments</div>"
-                f"{formatted_tool_args}"
-                f"</div><hr class='react-hr'>"
-            )
+        return (
+            f"<pre style='background-color: #f8f9fa; padding: 12px; border-radius: 4px; "
+            f"margin: 8px 0 0 0; overflow-x: auto; font-size: 13px; line-height: 1.5; "
+            f"font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; "
+            f"{wrap_style}'>"
+            f"<code>{json_str}</code></pre>"
+        )
 
-        # multiple simultaneous calls
+    def _format_single_tool_call(self, message):
+        tool_call = message.tool_calls[0]
+        tool_id, tool_name, tool_args = _extract_tool_details(tool_call)
+        self.pending_tool_calls.add(tool_id)
+        formatted_tool_args = self._format_json(tool_args)
+        return (
+            f"<div class='react-block'>"
+            f"<div style='font-size: 13px; color: #6b7280;'>Tool Call</div>"
+            f"<div style='font-size: 14px; color: #111827; margin-top: 6px;'>"
+            f"<code>{tool_name}</code></div>"
+            f"<div style='font-size: 12px; color: #9ca3af; margin: 4px 0 8px 0;'>{tool_id}</div>"
+            f"<div style='font-size: 13px; color: #6b7280; margin-bottom: 4px;'>Arguments</div>"
+            f"{formatted_tool_args}"
+            f"</div><hr class='react-hr'>"
+        )
+
+    def _format_multiple_tool_calls(self, message):
         output = (
             f"<div class='react-block'>"
             f"<div style='font-size: 13px; color: #6b7280; margin-bottom: 8px;'>"
             f"Calling {len(message.tool_calls)} Tools</div>"
         )
         for i, tool_call in enumerate(message.tool_calls):
-            tool_id, tool_name, tool_args = _extract_details(tool_call)
+            tool_id, tool_name, tool_args = _extract_tool_details(tool_call)
             self.pending_tool_calls.add(tool_id)
             formatted_tool_args = self._format_json(tool_args)
             output += (
@@ -60,6 +86,11 @@ class StreamHandler:
         output += "</div><hr class='react-hr'>"
         return output
 
+    def _format_agent_tool_calls(self, message):
+        if len(message.tool_calls) == 1:
+            return self._format_single_tool_call(message)
+        return self._format_multiple_tool_calls(message)
+
     def _format_token_usage(self, token_usage, elapsed):
         input_tokens = token_usage["input_tokens"]
         output_tokens = token_usage["output_tokens"]
@@ -71,13 +102,13 @@ class StreamHandler:
             total_price = input_price + output_price
             return (
                 f"<div style='font-size: 13px; color: #9ca3af; font-style: italic;'>"
-                f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ = {total_tokens:,} tokens • "
-                f"${total_price:.4f} • {elapsed:.2f}s"
+                f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ = {total_tokens:,} tokens  •  "
+                f"${total_price:.4f}  •  {elapsed:.2f}s"
                 f"</div>"
             )
         return (
             f"<div style='font-size: 13px; color: #9ca3af; font-style: italic;'>"
-            f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ = {total_tokens:,} tokens • "
+            f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ = {total_tokens:,} tokens  •  "
             f"{elapsed:.2f}s</div>"
         )
 
@@ -135,47 +166,21 @@ class StreamHandler:
                 )
         return output
 
-    def _format_json(self, data):
-        json_str = json.dumps(data, indent=2)
-        json_str = (
-            json_str
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
-        return (
-            "<pre style='background-color: #f8f9fa; padding: 12px; border-radius: 4px; "
-            "margin: 8px 0 0 0; overflow-x: auto; font-size: 13px; line-height: 1.5; "
-            "font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;'>"
-            f"<code>{json_str}</code></pre>"
-        )
-
     def _format_tool_result(self, result):
         # try formatting results to JSON, otherwise treat as string
         try:
             parsed_result = ast.literal_eval(result)
             return self._format_json(parsed_result)
-
-        except (json.JSONDecodeError, TypeError):
-            result_escaped = (
-                str(result)
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-            )
-            return (
-                "<pre style='background-color: #f8f9fa; padding: 12px; border-radius: 4px; "
-                "margin: 8px 0 0 0; overflow-x: auto; font-size: 13px; line-height: 1.5; "
-                "white-space: pre-wrap; word-wrap: break-word;'>"
-                f"<code>{result_escaped}</code></pre>"
-            )
+        except (ValueError, TypeError, SyntaxError):
+            return self._format_json(result, wrap=True)
 
     def _format_tool_messages(self, messages):
         output = ""
         for tool_message in messages:
-            tool_id = getattr(tool_message, "tool_call_id", "unknown")
-            tool_name = getattr(tool_message, "name", "unknown")
-            result = getattr(tool_message, "content", "")
+
+            tool_id = tool_message.tool_call_id
+            tool_name = tool_message.name
+            result = tool_message.content
 
             formatted_result = self._format_tool_result(result)
             output += (
