@@ -156,7 +156,11 @@ class StreamHandler:
             f"<div class='font-lg text-primary' style='line-height: 1.6;'>{escaped_content}</div>"
             f"</div>"
         )
-        output += self._format_token_usage(token_usage, elapsed)
+
+        # in error situations may not exist
+        if token_usage:
+            output += self._format_token_usage(token_usage, elapsed)
+
         return output
 
     def _handle_agent_chunk(self, chunk):
@@ -173,7 +177,7 @@ class StreamHandler:
             return self._format_agent_tool_calls(message)
 
         elif hasattr(message, "content") and message.content:
-            return self._format_final_answer(message, agent_data["token_usage"])
+            return self._format_final_answer(message, agent_data.get("token_usage"))
 
         raise RuntimeError("Agent message missing tool_calls and content")
 
