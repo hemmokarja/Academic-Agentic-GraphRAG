@@ -1,14 +1,11 @@
+
 # Agentic GraphRAG Engine for ML/AI Research
 
-An autonomous research assistant that reasons over 1.6M scientific entities through multi-step planning and graph traversal. Built on Linked Papers With Code and enriched with SemOpenAlex metadata, this system uses agentic workflows to explore ML research through the relationships between papers, authors, citations, methods, and research areas.
+An **autonomous research assistant** that reasons over 1.6M scientific entities (papers, authors, citations, methods, and research areas) from Linked Papers With Code and SemOpenAlex. This learning project demonstrates AI engineering skills through multi-step agentic reasoning over a large-scale knowledge graph of ML/AI research.
+
+Unlike traditional RAG systems that operate on flat document collections, this system **leverages the inherent graph structure of academic publications** to answer complex queries requiring graph traversal and relational reasoning. The **interactive Streamlit interface provides full transparency into the agent's decision-making process.** You can watch in real-time as the agent decomposes queries into reasoning steps, selects tools, and constructs multi-hop graph traversals.
 
 ⚠️ **Note: Project currently under active development**
-
-## 🎯 Overview
-
-This is a learning project demonstrating AI engineering skills through the implementation of an **intelligent agent capable of multi-step reasoning over a large-scale knowledge graph of ML/AI research**. Unlike traditional RAG systems that operate on flat document collections, this system **leverages the inherent graph structure of academic publications** - papers, authors, citations, methods, and research areas - to answer complex queries that require graph traversal and relational reasoning.
-
-The system features an **interactive Streamlit interface that provides full transparency into the agent's decision-making process**. Users can observe in real-time as the agent decomposes complex queries into reasoning steps, selects appropriate tools, and constructs multi-hop graph traversals, making the "black box" of agentic reasoning visible and interpretable.
 
 ## 💡 What Can You Ask?
 
@@ -65,6 +62,7 @@ While vanilla GraphRAG systems allow LLMs to select and execute graph queries, t
 
 - **Neo4j**: Graph database running in a Docker container
 - **LangGraph**: Orchestrates communication between the agent and language models
+- **LLM Providers**: Compatible with OpenAI and Anthropic models
 - **Custom ReAct Agent**: Built from scratch with:
   - Multi-step reasoning loops with thought/action/observation cycles
   - Iterative refinement based on partial results
