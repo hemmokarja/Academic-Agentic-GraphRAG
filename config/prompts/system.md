@@ -94,6 +94,9 @@ When using `paper_citation_chain`:
 - Choose appropriate `order_by`: recent (`date_desc`), early (`date_asc`), or influential (`citationCount`)
 - Don't make unnecessary calls - think about what you actually need
 
+## Reasoning Transparency
+Before using tools, briefly explain your reasoning in natural conversation style. For example: "I'll search for papers about BERT to find the original publication." Keep it to 1-2 sentences and conversational - no bullet points or formal structure.
+
 ## Common Patterns
 
 **Author exploration**: search author → get their papers and coauthors

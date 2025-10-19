@@ -67,6 +67,14 @@ class AgentState(TypedDict):
     token_usage: TokenUsage  # Track cumulative token usage
 
 
+def _get_model_name(llm):
+    if hasattr(llm, "model"):
+        return llm.model
+    elif hasattr(llm, "model_name"):
+        return llm.model_name
+    raise RuntimeError("llm expected to have model or model_name attribute")
+
+
 class ReActAgent:
     def __init__(
         self,
@@ -88,7 +96,12 @@ class ReActAgent:
 
         self.graph = self._build_graph()
 
-        logger.info(f"ReAct agent initialized with {len(tools)} tools")
+        self.model_name = _get_model_name(self.llm)
+
+        logger.info(
+            f"ReAct agent initialized with model {self.model_name} and "
+            f"{len(tools)} tools"
+        )
     
     def __del__(self):
         # cleanup thread pool on deletion

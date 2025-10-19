@@ -118,7 +118,7 @@ The agent has access to specialized tools for exploring the knowledge graph:
 - `uv` package manager
 - Make (for Makefile)
 - Neo4j Desktop (recommended but not required)
-- OpenAI API key
+- Anthropic API key
 
 **System Requirements**: Parsing LPWC RDF files is resource-intensive. A machine with **>25GB RAM** is recommended.
 
@@ -160,7 +160,7 @@ This command performs the complete pipeline:
 ### Start Chatting
 
 ```bash
-export OPENAI_API_KEY=<your_api_key_here>
+export ANTHROPIC_API_KEY=<your_api_key_here>
 make chat
 ```
 
@@ -211,7 +211,7 @@ Use this procedure to establish a **Remote Connection** in Neo4j Desktop to manu
 
 - **Data Completeness**: Neither LPWC nor SemOpenAlex are perfect. Some authors, papers, or citation relationships may be missing or incomplete.
 - **Data Freshness**: LPWC is updated infrequently. The latest RDF dump (as of this project) is from **2024-09-06**. Research published after this date will not be present in the knowledge graph.
-- **LLM Provider**: Currently supports OpenAI models only. Anthropic support may be added in the future.
+- **LLM Provider**: Currently supports Anthropic models only.
 
 ## 🎓 Learning Outcomes
 

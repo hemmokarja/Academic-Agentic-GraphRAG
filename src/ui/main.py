@@ -1,7 +1,7 @@
 import atexit
 import logging
 
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 
 from rag import driver
 from rag.agent import AgentConfig, ReActAgent
@@ -23,7 +23,7 @@ def main():
     with open("config/prompts/system.md", "r") as f:
         system_message = f.read()
 
-    llm = ChatOpenAI(model="gpt-4.1")
+    llm = ChatAnthropic(model="claude-haiku-4-5")
     tools = [
         search_tools.search_nodes,
         author_tools.author_papers,

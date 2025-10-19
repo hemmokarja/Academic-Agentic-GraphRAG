@@ -21,7 +21,6 @@ DATE_TO = Field(
 class PaperQueryParams(BaseModel):
     """Common query parameters for paper search."""
     limit: int = Field(
-        default=50,
         ge=1,
         le=200,
         description="Maximum number of papers to return"
