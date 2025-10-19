@@ -41,8 +41,8 @@ def main():
         method_tools.method_categories,
     ]
     config = AgentConfig(
-        max_iterations=10,
-        max_execution_time=120.0,
+        max_iterations=20,
+        max_execution_time=360.0,
         tool_execution_timeout=60.0,
         max_tool_retries=2,
         system_message=system_message
