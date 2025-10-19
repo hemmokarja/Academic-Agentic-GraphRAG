@@ -1,55 +1,97 @@
+import ast
 import json
+import time
+
+
+def _escape_string(string):
+    return (
+        string
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _extract_tool_details(tool_call):
+    tool_id = tool_call.get("id", "unknown")
+    tool_name = tool_call.get("name", "unknown")
+    tool_args = tool_call.get("args", {})
+    return tool_id, tool_name, tool_args
 
 
 class StreamHandler:
-    def __init__(
-        self,
-        model_name,
-        show_tool_results=False,
-        show_token_usage=True
-    ):
-        self.show_tool_results = show_tool_results
-        self.show_token_usage = show_token_usage
-
+    def __init__(self, model_name):
         self.last_iteration = 0
-        self.pending_tool_calls = set()  # track pending tool calls
+        self.pending_tool_calls = set()
+        self.start_time = time.time()
 
         with open("src/ui/api_pricing.json", "r") as f:
             model_to_pricing = json.loads(f.read())
 
         self.pricing = model_to_pricing.get(model_name)
 
-    def _format_agent_tool_calls(self, message):
-
-        def _extract_details(tool_call):
-            tool_id = tool_call.get("id", "unknown")
-            tool_name = tool_call.get("name", "unknown")
-            tool_args = tool_call.get("args", {})
-            return tool_id, tool_name, tool_args
-
-        # only one tool call
-        if len(message.tool_calls) == 1:
-            tool_call = message.tool_calls[0]
-            tool_id, tool_name, tool_args = _extract_details(tool_call)
-            self.pending_tool_calls.add(tool_id)
-            return (
-                f"🔧 **Calling tool:** `{tool_name}` (ID: `{tool_id}`) "
-                f"**Args**: `{tool_args}`\n\n"
-            )
-
-        # several simultaneous calls
+    def _format_json(self, data, wrap=False):
+        if isinstance(data, (dict, list)):
+            json_str = json.dumps(data, indent=2)
         else:
-            output = f"🔧 **Calling {len(message.tool_calls)} tools:**\n\n"
+            json_str = str(data)
 
-            for tool_call in message.tool_calls:
-                tool_id, tool_name, tool_args = _extract_details(tool_call)
-                self.pending_tool_calls.add(tool_id)
-                output += (
-                    f"  • `{tool_name}` (ID: `{tool_id}`) **Args**: `{tool_args}`\n\n"
-                )
-            return output
+        json_str = _escape_string(json_str)
+        
+        # wrap long strings
+        wrap_style = "white-space: pre-wrap; word-wrap: break-word;" if wrap else ""
 
-    def _format_token_usage(self, token_usage):
+        return (
+            f"<pre style='background-color: #f8f9fa; padding: 12px; border-radius: 4px; "
+            f"margin: 8px 0 0 0; overflow-x: auto; font-size: 13px; line-height: 1.5; "
+            f"font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; "
+            f"{wrap_style}'>"
+            f"<code>{json_str}</code></pre>"
+        )
+
+    def _format_single_tool_call(self, message):
+        tool_call = message.tool_calls[0]
+        tool_id, tool_name, tool_args = _extract_tool_details(tool_call)
+        self.pending_tool_calls.add(tool_id)
+        formatted_tool_args = self._format_json(tool_args)
+        return (
+            f"<div class='react-block'>"
+            f"<div style='font-size: 13px; color: #6b7280;'>Tool Call</div>"
+            f"<div style='font-size: 14px; color: #111827; margin-top: 6px;'>"
+            f"<code>{tool_name}</code></div>"
+            f"<div style='font-size: 12px; color: #9ca3af; margin: 4px 0 8px 0;'>{tool_id}</div>"
+            f"<div style='font-size: 13px; color: #6b7280; margin-bottom: 4px;'>Arguments</div>"
+            f"{formatted_tool_args}"
+            f"</div><hr class='react-hr'>"
+        )
+
+    def _format_multiple_tool_calls(self, message):
+        output = (
+            f"<div class='react-block'>"
+            f"<div style='font-size: 13px; color: #6b7280; margin-bottom: 8px;'>"
+            f"Calling {len(message.tool_calls)} Tools</div>"
+        )
+        for i, tool_call in enumerate(message.tool_calls):
+            tool_id, tool_name, tool_args = _extract_tool_details(tool_call)
+            self.pending_tool_calls.add(tool_id)
+            formatted_tool_args = self._format_json(tool_args)
+            output += (
+                f"<div style='margin-bottom: {'8px' if i < len(message.tool_calls) - 1 else '0'};'>"
+                f"<div style='font-size: 14px; color: #111827;'>"
+                f"{i+1}. <code>{tool_name}</code></div>"
+                f"<div style='font-size: 12px; color: #9ca3af; margin: 4px 0 8px 0;'>{tool_id}</div>"
+                f"{formatted_tool_args}"
+                f"</div>"
+            )
+        output += "</div><hr class='react-hr'>"
+        return output
+
+    def _format_agent_tool_calls(self, message):
+        if len(message.tool_calls) == 1:
+            return self._format_single_tool_call(message)
+        return self._format_multiple_tool_calls(message)
+
+    def _format_token_usage(self, token_usage, elapsed):
         input_tokens = token_usage["input_tokens"]
         output_tokens = token_usage["output_tokens"]
         total_tokens = token_usage["total_tokens"]
@@ -58,20 +100,17 @@ class StreamHandler:
             input_price = self.pricing["input"] * (input_tokens / 1e6)
             output_price = self.pricing["output"] * (output_tokens / 1e6)
             total_price = input_price + output_price
-            
             return (
-                f"\n<sub style='color: #888; font-style: italic;'>"
-                f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ "
-                f"= {total_tokens:,} tokens • ${total_price:.4f}"
-                f"</sub>\n"
+                f"<div style='font-size: 13px; color: #9ca3af; font-style: italic;'>"
+                f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ = {total_tokens:,} tokens  •  "
+                f"${total_price:.4f}  •  {elapsed:.2f}s"
+                f"</div>"
             )
-        else:
-            return (
-                f"\n<sub style='color: #888; font-style: italic;'>"
-                f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ "
-                f"= {total_tokens:,} tokens"
-                f"</sub>\n"
-            )
+        return (
+            f"<div style='font-size: 13px; color: #9ca3af; font-style: italic;'>"
+            f"This response: {input_tokens:,}↑ + {output_tokens:,}↓ = {total_tokens:,} tokens  •  "
+            f"{elapsed:.2f}s</div>"
+        )
 
     def _handle_agent_chunk(self, chunk):
         agent_data = chunk["agent"]
@@ -82,24 +121,24 @@ class StreamHandler:
         if not messages:
             return ""
 
-        self.last_iteration = iteration  # update tracking of the current iteration
-
+        self.last_iteration = iteration
         message = messages[0]
 
         if hasattr(message, "tool_calls") and message.tool_calls:
             return self._format_agent_tool_calls(message)
 
         elif hasattr(message, "content") and message.content:
-            output = f"💡 **Final Answer:**\n\n{message.content}\n"
-            if self.show_token_usage:
-                output += self._format_token_usage(token_usage)
+            elapsed = time.time() - self.start_time
+            output = (
+                f"<div class='react-block'>"
+                f"<div style='font-size: 16px; color: #6b7280; margin-bottom: 10px;'>💡 Final Answer</div>"
+                f"<div style='font-size: 16px; color: #111827; line-height: 1.6;'>{message.content}</div>"
+                f"</div>"
+            )
+            output += self._format_token_usage(token_usage, elapsed)
             return output
 
-        else:
-            raise RuntimeError(
-                "Expected agent message to contain either tool_calls or content "
-                f"attribute but got neither. Message: {message}"
-            )
+        raise RuntimeError("Agent message missing tool_calls and content")
 
     def _format_tool_errors(self, errors):
         output = ""
@@ -109,65 +148,68 @@ class StreamHandler:
                 tool_name = error.get("tool", "unknown")
                 tool_id = error.get("tool_call_id", "unknown")
                 output += (
-                    f"⚠️ **Issue with tool:** `{tool_name}` (ID: `{tool_id}`) :"
-                    f"`{error_msg}`\n\n"
+                    f"<div class='react-block'>"
+                    f"<div style='font-size: 13px; color: #dc2626;'>Tool Error</div>"
+                    f"<div style='font-size: 14px; color: #111827; margin: 4px 0;'>"
+                    f"<code>{tool_name}</code></div>"
+                    f"<div style='font-size: 12px; color: #9ca3af; margin-bottom: 6px;'>{tool_id}</div>"
+                    f"<div style='font-size: 13px; color: #dc2626;'>{error_msg}</div>"
+                    f"</div><hr class='react-hr'>"
                 )
-
-                # remove from pending
                 self.pending_tool_calls.discard(tool_id)
             else:
-                output += f"❌ **Tool execution failed:** {error}\n\n"
+                output += (
+                    f"<div class='react-block'>"
+                    f"<div style='font-size: 13px; color: #dc2626;'>Execution Failed</div>"
+                    f"<div style='font-size: 13px; color: #dc2626;'>{error}</div>"
+                    f"</div><hr class='react-hr'>"
+                )
         return output
 
+    def _format_tool_result(self, result):
+        # try formatting results to JSON, otherwise treat as string
+        try:
+            parsed_result = ast.literal_eval(result)
+            return self._format_json(parsed_result)
+        except (ValueError, TypeError, SyntaxError):
+            return self._format_json(result, wrap=True)
+
     def _format_tool_messages(self, messages):
-        # handle successful tool results
         output = ""
         for tool_message in messages:
-            tool_id = (
-                tool_message.tool_call_id
-                if hasattr(tool_message, "tool_call_id")
-                else "unknown"
+
+            tool_id = tool_message.tool_call_id
+            tool_name = tool_message.name
+            result = tool_message.content
+
+            formatted_result = self._format_tool_result(result)
+            output += (
+                f"<div class='react-block'>"
+                f"<div style='font-size: 13px; color: #6b7280;'>Tool Result</div>"
+                f"<div style='font-size: 14px; color: #111827; margin: 6px 0;'>"
+                f"<code>{tool_name}</code></div>"
+                f"<div style='font-size: 12px; color: #9ca3af; margin-bottom: 6px;'>{tool_id}</div>"
+                f"<details>"
+                f"<summary style='font-size: 13px; color: #6b7280;'>View result</summary>"
+                f"{formatted_result}</details></div><hr class='react-hr'>"
             )
-            tool_name = (
-                tool_message.name if hasattr(tool_message, "name") else "unknown"
-            )
-            result = (
-                tool_message.content if hasattr(tool_message, "content") else ""
-            )
 
-            tool_result = f"✅ **Tool result:** `{tool_name}` (ID: `{tool_id}`) "
-
-            if self.show_tool_results:
-                tool_result += f"→ `{result}`\n\n"
-            else:
-                tool_result += "success!\n\n"
-
-            output += tool_result
-
-            # remove from pending
             self.pending_tool_calls.discard(tool_id)
 
-        # after all tool executions complete, show next thinking message
-        if not self.pending_tool_calls:  # All tools have returned
+        if not self.pending_tool_calls:
             next_iteration = self.last_iteration + 1
-            output += "\n" + self.get_thinking_message(next_iteration)
+            output += self.get_thinking_message(next_iteration)
 
         return output
 
     def _handle_tools_chunk(self, chunk):
         messages = chunk["tools"].get("messages", [])
         errors = chunk["tools"].get("errors", [])
-
         if errors:
             return self._format_tool_errors(errors)
-
         if messages:
             return self._format_tool_messages(messages)
-
-        raise RuntimeError(
-            "Expected tools chunk to have errors or messages, but got neither. "
-            f"Chunk: {chunk}"
-        ) 
+        raise RuntimeError("Tools chunk missing errors and messages")
 
     def process_chunk(self, chunk):
         """
@@ -180,10 +222,11 @@ class StreamHandler:
         elif "tools" in chunk:
             return self._handle_tools_chunk(chunk)
 
-        raise RuntimeError(
-            "Expected chunk to contain tools or agent attribute, but got neither. "
-            f"Chunk: {chunk}"
-        )
+        raise RuntimeError("Chunk missing agent or tools key")
 
     def get_thinking_message(self, iteration):
-        return f"🤔 **Agent thinking (iteration {iteration})...**\n\n"
+        return (
+            f"<div class='react-block' style='padding-bottom: 0;'>"
+            f"<div style='font-size: 15px; color: #6b7280;'>💭 Agent Thinking... (iteration {iteration})</div>"
+            f"</div><hr class='react-hr'>"
+        )

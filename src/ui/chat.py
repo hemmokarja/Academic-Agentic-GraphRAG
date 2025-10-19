@@ -1,7 +1,5 @@
 import uuid
-
 import streamlit as st
-
 from ui.stream_handler import StreamHandler
 
 DEFAULT_TITLE = "🤖 ReAct Agent Chat"
@@ -10,10 +8,39 @@ DEFAULT_SUBTITLE = (
 )
 
 
+def _apply_global_styling():
+    with open("src/ui/styles.css", "r") as f:
+        styles = f.read()
+
+    st.markdown(f"<style>{styles}</style>", unsafe_allow_html=True)
+
+
+def _render_sidebar():
+    with st.sidebar:
+        
+        st.markdown(f"**Thread ID:** `{st.session_state.thread_id[:8]}...`")
+
+        if st.button("🔄 New Conversation", use_container_width=True):
+            st.session_state.thread_id = str(uuid.uuid4())
+            st.session_state.messages = []
+            st.rerun()
+
+        st.markdown("---")
+
+        tools = st.session_state.agent.tools
+        tool_names_list = "\n".join([f"- `{t.name}`" for t in tools])
+        
+        st.header("🛠️ Tools")
+        st.markdown(tool_names_list)
+
+        st.markdown("---")
+        
+        st.header("ℹ️ About")
+        st.markdown("This ReAct agent uses reasoning and tool execution to solve complex problems.")
+
+
 def chat(
     agent,
-    show_tool_results=False,
-    show_token_usage=True,
     page_title=DEFAULT_TITLE,
     page_subtitle=DEFAULT_SUBTITLE,
 ):
@@ -22,6 +49,8 @@ def chat(
         page_icon="🤖",
         layout="centered"
     )
+
+    _apply_global_styling()
 
     st.title(page_title)
     st.markdown(page_subtitle)
@@ -42,7 +71,7 @@ def chat(
 
     if prompt := st.chat_input("What would you like to know?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
-
+        
         # display user message
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -52,58 +81,25 @@ def chat(
             message_placeholder = st.empty()
             full_response = ""
 
-            handler = StreamHandler(
-                agent.llm.model_name, show_tool_results, show_token_usage
-            )
-            config = {"configurable": {"thread_id": st.session_state.thread_id}}
+            handler = StreamHandler(agent.llm.model_name)
 
+            config = {"configurable": {"thread_id": st.session_state.thread_id}}
+            
             # start with initial thinking message
             full_response = handler.get_thinking_message(iteration=1)
             message_placeholder.markdown(full_response, unsafe_allow_html=True)
 
-            try:
-                for chunk in st.session_state.agent.stream(
-                    prompt, config=config, stream_mode="updates"
-                ):
-                    chunk_text = handler.process_chunk(chunk)
-                    if chunk_text:
-                        full_response += chunk_text
-                        message_placeholder.markdown(
-                            full_response, unsafe_allow_html=True
-                        )
+            for chunk in st.session_state.agent.stream(
+                prompt, config=config, stream_mode="updates"
+            ):
+                chunk_text = handler.process_chunk(chunk)
+                if chunk_text:
+                    full_response += chunk_text
+                    message_placeholder.markdown(full_response, unsafe_allow_html=True)
 
-                # store the final response
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": full_response}
-                )
+            # store the final response
+            st.session_state.messages.append(
+                {"role": "assistant", "content": full_response}
+            )
 
-            except Exception as e:
-                error_msg = f"❌ **Error:** {str(e)}"
-                message_placeholder.markdown(error_msg)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": error_msg}
-                )
-    
-    # sidebar with info
-    with st.sidebar:
-        
-        st.markdown(f"**Thread ID:** `{st.session_state.thread_id[:8]}...`")
-        
-        if st.button("🔄 New Conversation"):
-            st.session_state.thread_id = str(uuid.uuid4())
-            st.session_state.messages = []
-            st.rerun()
-
-        st.markdown("---")
-
-        tools = st.session_state.agent.tools
-        tool_names_list = "\n".join([f"- `{t.name}`" for t in tools])
-
-        st.header("ℹ️ About")
-        st.markdown(f"""
-This is a ReAct agent with the following tools:
-
-{tool_names_list}
-
-The agent uses reasoning and tool calls to solve your problems.
-        """)
+    _render_sidebar()

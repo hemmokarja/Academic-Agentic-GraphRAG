@@ -1,0 +1,35 @@
+details summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+details summary::-webkit-details-marker {
+    display: none;
+}
+
+details[open] summary {
+    margin-bottom: 4px;
+}
+
+details[open] summary::before {
+    content: '▾ ';
+}
+
+details:not([open]) summary::before {
+    content: '▸ ';
+}
+
+[data-testid="stChatMessage"] {
+    align-items: flex-start !important;
+}
+
+.react-block {
+    padding: 8px 0 !important;
+    margin: 0 !important;
+}
+
+.react-hr {
+    border: none !important;
+    border-top: 1px solid #e5e7eb !important;
+    margin: 6px 0 !important;
+}
