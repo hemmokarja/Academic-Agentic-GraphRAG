@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from rag import driver as driver_module
 from rag.tools import shared_models
-from rag.tools.shared_models import PaperQueryParams
+from rag.tools.shared_models import PaperQueryParamsWithDates
 
 AUTHOR_NODE_ID = Field(
     description=(
@@ -15,7 +15,7 @@ AUTHOR_NODE_ID = Field(
 )
 
 
-class AuthorPapersInput(PaperQueryParams):
+class AuthorPapersInput(PaperQueryParamsWithDates):
     """Input schema for finding papers by an author."""
     author_node_id: str = AUTHOR_NODE_ID
 
